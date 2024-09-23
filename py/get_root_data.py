@@ -4,10 +4,13 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from scipy.stats import pearsonr
+from matplotlib.patches import Ellipse
 
 file_1 = "../data/output-data-fullfeb2v2-20240910.root:Data"
 
 file_2 = "../data/output-data-MXSX-hct20l-2024-09-18.root:Data"
+
+file_3 = "../data/output-data-MXSX-hct20l-2024-09-23.root:Data"
 
 def get_root_data(file):
     '''
@@ -108,26 +111,27 @@ def correlation(file, gain, auto_range=True):
     #calculating correlation coefficient for all channel combinations
     for i in range(128):
         for j in range(128):
-            data_chan_i = data[(data['febChannel']==i) & (data['gain']==gain)]['ADC'].to_numpy() #writing adc to an array
-            data_chan_j = data[(data['febChannel']==j) & (data['gain']==gain)]['ADC'].to_numpy()
+            data_chan_i = data[(data['febChannel']==i) & (data['gain']==gain)]['ADC'].to_numpy().flatten() #writing adc to an array
+            data_chan_j = data[(data['febChannel']==j) & (data['gain']==gain)]['ADC'].to_numpy().flatten()
             
+            # A = []
+            # B = []
             
-            A = []
-            B = []
-            
-            #taking first time entry for each event
-            for n in data_chan_i:
-                A.append(n[0])
-            for m in data_chan_j:
-                B.append(m[0])
+            # #taking first time entry for each event
+            # for n in data_chan_i:
+            #     A.append(n[q])
+            # for m in data_chan_j:
+            #     B.append(m[q])
             
             #creating arrays of data
-            A = np.array(A, dtype=np.float64)
-            B = np.array(B, dtype=np.float64)
+            A = np.array(data_chan_i, dtype=np.float64)
+            B = np.array(data_chan_j, dtype=np.float64)
             if len(A) != len(B): #skipping if arrays are different lenghts 
                 continue
             
-            corr_coefficient = (np.mean(A*B) - np.mean(A)*np.mean(B))/(np.std(A)*np.std(B)) #calculating Pearson correlation coefficient
+            #corr_coefficient = (np.mean(A*B) - np.mean(A)*np.mean(B))
+            #/(np.std(A)*np.std(B)) #calculating Pearson correlation coefficient
+            corr_coefficient = pearsonr(A,B)[0]
             
             #populating matrix depending on auto_range settings
             if auto_range:
@@ -153,17 +157,17 @@ def correlation(file, gain, auto_range=True):
     plt.imshow(matrix, vmin=-max_v,vmax=max_v, cmap='bwr')
     plt.colorbar(shrink=0.785)
     plt.tight_layout()
-    plt.savefig(f'../plots/{auto_range}_{file.split('/')[-1]}_channel_gain{gain}_correlation.png')
+    plt.savefig(f'../plots/{auto_range}_{file.split('/')[-1]}_channel_gain{gain}_correlation_fullavg.png')
 
     return matrix
 
-def ADC_event(file):
+def ADC_event(file, chan, gain):
     '''
     Plots a 2d histogram of ADC vs events for specified channel and gain
     STILL WORKING, NOT FUNCTIONAL 
     '''
     data = get_root_data(file) #extracts data
-    data_feb = data[(data['febChannel']==20) & (data['gain']==1)] #selects channel and gain
+    data_feb = data[(data['febChannel']==chan) & (data['gain']==gain)] #selects channel and gain
     data_event = data_feb['iEvent'].to_numpy() 
     data_adc = data_feb['ADC'].to_numpy()
     
@@ -174,24 +178,32 @@ def ADC_event(file):
             events.append(i)
             adc.append(data_adc[i][j])
     
+    plt.figure(figsize=(15,12))
+    plt.title(f'ADC:iEvent (gain=={gain} & febChannel=={chan})', fontsize=20)
+    plt.xlabel('iEvent', fontsize=14)
+    plt.ylabel('ADC', fontsize=14)
     cmap = plt.cm.viridis  # Use the 'viridis' colormap
-    cmap.set_under(color='white', alpha=0)  # Set color for under zero counts to white and transparent
-    plt.hist2d(events,adc,cmap=cmap,bins=[40,58])
+    hist = plt.hist2d(events,adc,cmap=cmap,bins=[40,58], cmin=1)
+    plt.colorbar()
     
-    # Create the 2D histogram
-    # hist, xedges, yedges = np.histogram2d(events, adc, bins=[40, 58])
-    
-    # start = 0
-    # end = 245
-    # avg_adc = []
-    # bin_lst = []
-    # for i in range(42):
-    #     data_bin = data_feb[(data_feb['iEvent'] <= end) & (data_feb['iEvent'] > start)]
-    #     avg_adc.append(np.mean(data_bin['ADC']))
-    #     bin_lst.append(start + (end-start)/2)
-    #     start += 245
-    #     end += 245
+    avg_adc = []
+    bin_lst = []
+    std_up_adc = []
+    std_down_adc = []
+    for i in range(len(hist[1]) - 1):
+        data_bin = data_feb[(data_feb['iEvent'] <= hist[1][i+1]) & (data_feb['iEvent'] > hist[1][i])]
+        avg_adc.append(np.mean(data_bin['ADC']))
+        std_up_adc.append(avg_adc[-1] + np.std(data_bin['ADC']))
+        std_down_adc.append(avg_adc[-1] - np.std(data_bin['ADC']))
+        bin_lst.append(hist[1][i+1])
 
+    plt.plot(bin_lst,avg_adc,color='red', label='Mean/bin')
+    plt.plot(bin_lst,std_up_adc,color='red', linestyle='--', label='Stdev/bin')
+    plt.plot(bin_lst,std_down_adc,color='red', linestyle='--')
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(f'../plots/ADC_iEvent_{chan}_{gain}.png')
+        
     # # Set up the plot
     # plt.figure(figsize=(13, 10))
     # # Create a custom colormap
@@ -275,30 +287,68 @@ def check_list(lst, samples):
     #returning bool of sorting status
     return all(mod_list[i] < mod_list[i + 1] for i in range(len(mod_list) - 1))
 
-def check_matrix(file,chan1,chan2):
+def check_matrix(file,chan1,chan2, gain):
     '''
     check for the correlation matrix. Plots a 2d hist of specified channels to check validity of correlation coefficient
     '''
     data = get_root_data(file) #extract data
-    data_i = data[(data['febChannel']==chan1) & (data['gain']==0)] #taking specified channel and gain
-    data_j = data[(data['febChannel']==chan2) & (data['gain']==0)]
+    data_i = data[(data['febChannel']==chan1) & (data['gain']==gain)]['ADC'].to_numpy().flatten() #taking specified channel and gain
+    data_j = data[(data['febChannel']==chan2) & (data['gain']==gain)]['ADC'].to_numpy().flatten()
     
     #getting data for first time entry for each event
-    adc_i = []
-    adc_j = []
-    for adc in data_i['ADC']:
-        adc_i.append(adc[0])
-    for adc in data_j['ADC']:
-        adc_j.append(adc[0])
-        
-    #plotting
+    # adc_i = []
+    # adc_j = []
+    # for adc in data_i['ADC']:
+    #     adc_i.append(adc[0])
+    # for adc in data_j['ADC']:
+    #     adc_j.append(adc[0])
+    
+    A = np.array(data_i, dtype=np.float64)
+    B = np.array(data_j, dtype=np.float64)
+    
+    corr_coefficient = (np.mean(A*B) - np.mean(A)*np.mean(B))/(np.std(A)*np.std(B))
+    
+    # data = np.vstack((A,B)).T
+
+    # # Calculate the mean and covariance matrix
+    # mean = np.mean(data, axis=0)
+    # cov_matrix = np.cov(data, rowvar=False)
+
+    # # Calculate eigenvalues and eigenvectors
+    # eigenvalues, eigenvectors = np.linalg.eigh(cov_matrix)
+
+    # # Calculate the angle of rotation for the ellipse
+    # angle = np.arctan2(eigenvectors[1, 0], eigenvectors[0, 0]) * (180 / np.pi)
+
+    # # Calculate the width and height of the ellipse
+    # # The factor 2 is used to represent the full width and height
+    # width = 2 * np.sqrt(eigenvalues[1])  # For the larger eigenvalue
+    # height = 2 * np.sqrt(eigenvalues[0])  # For the smaller eigenvalue
+
+    # # Create a figure and axis
+    # # Create and add the ellipse
+    # ellipse = Ellipse(mean, width, height, angle=45, edgecolor='blue', facecolor='none', linewidth=2)
+    # ecent = np.sqrt(-((height/2 - width/2)**2 - 1))
+    # ecent_2 = np.sqrt(1-corr_coefficient**2)
+    # print(ecent, ecent_2)
+    # # eccentricity = np.sqrt(1-corr_coefficient)
+    # semi_major_axis = np.std(A) 
+    # semi_minor_axis = semi_major_axis * np.sqrt(1 - eccentricity**2)
+    
+    # ellipse = Ellipse((np.mean(adc_i),np.mean(adc_j)), 2*semi_major_axis, 2*semi_minor_axis,angle=45)
+    
+    # #plotting
+    A_bins = int(np.max(A) - np.min(A))
+    B_bins = int(np.max(B) - np.min(B))
     plt.figure(figsize=(12,12))
-    plt.hist2d(adc_i,adc_j, bins=[18,18])
-    plt.title(f'Channel {chan1} vs Channel {chan2}')
+    hist = plt.hist2d(A,B, bins=[A_bins,B_bins],cmin=1)
+    plt.colorbar()
+    plt.title(f'Channel {chan1} vs Channel {chan2}, gain: {gain}, Pearson correlation: {round(100*corr_coefficient,1)}%')
     plt.xlabel(f'Channel {chan1}')
     plt.ylabel(f'Channel {chan2}')
-    plt.savefig(f'../plots/{chan1}_{chan2}_scatter.png')
-    
+    plt.tight_layout()
+    plt.savefig(f'../plots/{chan1}_{chan2}_{gain}_scatter.png')
+    print(hist)
 
 '''
 #Test data for check_bcid function
