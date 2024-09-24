@@ -294,29 +294,35 @@ def gaussian(x, amp, mean, stddev):
 
 def coherent_noise(file, gain):
     '''
-    
+    Plots a coherent noise plot for the specified file and gain
     '''
-    data = get_root_data(file)
+    data = get_root_data(file) #getting data
 
+    #defining dictionaries, lists and starting sums
     data_dic = {}
     rms = {}
     d_rms = {}
     ch_noise = 0
     d_ch_noise = 0
     dataSum = []
-    for chan in range(128):
+    
+    #looping over all channels
+    N_channels = np.max(data['febChannel']) + 1
+    for chan in range(N_channels):
         data_chan = data[(data['febChannel']==chan) & (data['gain']==gain)]['ADC'].to_numpy().flatten()
         data_dic[chan] = data_chan
         rms[chan] = np.std(data_chan-np.mean(data_chan))
         d_rms[chan] = rms[chan]/np.sqrt(len(data_chan))
         ch_noise += rms[chan] ** 2
         d_ch_noise += d_rms[chan] ** 2
+    #calculating noise
     ch_noise = np.sqrt(ch_noise)
     d_ch_noise = np.sqrt(d_ch_noise)
-    avg_noise = ch_noise / np.sqrt(128)
-    d_avg = d_ch_noise / np.sqrt(128)
+    avg_noise = ch_noise / np.sqrt(N_channels)
+    d_avg = d_ch_noise / np.sqrt(N_channels)
     
-    gain_df_channels = list(range(0,128))
+    #calculating hist data
+    gain_df_channels = list(range(N_channels))
     data_by_channel = np.array([data_dic[ch] for ch in gain_df_channels])
     channel_means = np.mean(data_by_channel, axis=1)
     dataSum = np.sum([(data_dic[ch] - channel_means[i]) for i, ch in enumerate(gain_df_channels)], axis=0)
@@ -324,7 +330,10 @@ def coherent_noise(file, gain):
     tot_noise = np.std(dataSum)
     mu = round(np.mean(dataSum), 3)
     std = round(np.std(dataSum), 3)
+    coh_noise = np.sqrt(tot_noise**2 - ch_noise**2) /N_channels
+    pct_coh = coh_noise / avg_noise * 100
     
+    #plotting
     plt.figure(figsize=(13,13))
     y, x, _ = plt.hist(
         dataSum,
@@ -335,11 +344,7 @@ def coherent_noise(file, gain):
         label=rf"RMS = {np.round(tot_noise,3)}, $\mu$ = {np.round(mu,3)}, $\sigma$ = {np.round(std, 3)}",
     )
     
-    coh_noise = np.sqrt(tot_noise**2 - ch_noise**2) /128
-
-    pct_coh = coh_noise / avg_noise * 100
-    
-    plt.text(0.05, 0.95,f'Entries = {round(len(dataSum)/1000,1)}k\nN ch = 128\nMean = {round(mu,1)}\nRMS = {round(tot_noise,1)}\nAvg noise/ch = {round(avg_noise,1)}\nCohe noise/ch = {round(coh_noise,1)}\n[%]Cohe noise = {round(pct_coh,1)}', transform=plt.gca().transAxes,fontsize=15, verticalalignment='top', horizontalalignment='left')
+    plt.text(0.05, 0.95,f'Entries = {round(len(dataSum)/1000,1)}k\nN ch = {N_channels}\nMean = {round(mu,1)}\nRMS = {round(tot_noise,1)}\nAvg noise/ch = {round(avg_noise,1)}\nCohe noise/ch = {round(coh_noise,1)}\n[%]Cohe noise = {round(pct_coh,1)}', transform=plt.gca().transAxes,fontsize=15, verticalalignment='top', horizontalalignment='left')
     plt.title(f'EMF system test, coherence, gain: {gain}', fontsize=20)
     
     plt.xlabel('ADC counts', fontsize=15)
