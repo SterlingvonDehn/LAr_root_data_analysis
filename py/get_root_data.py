@@ -113,23 +113,25 @@ def correlation(file, gain, auto_range=True):
             data_chan_i = data[(data['febChannel']==i) & (data['gain']==gain)]['ADC'].to_numpy().flatten() #writing adc to an array
             data_chan_j = data[(data['febChannel']==j) & (data['gain']==gain)]['ADC'].to_numpy().flatten()
             
-            # A = []
-            # B = []
+            '''
+            Used if only one time entrie is desired
+            A = []
+            B = []
             
-            # #taking first time entry for each event
-            # for n in data_chan_i:
-            #     A.append(n[q])
-            # for m in data_chan_j:
-            #     B.append(m[q])
+            #taking first time entry for each event
+            for n in data_chan_i:
+                A.append(n[0])
+            for m in data_chan_j:
+                B.append(m[0])
             
+            '''
             #creating arrays of data
             A = np.array(data_chan_i, dtype=np.float64)
             B = np.array(data_chan_j, dtype=np.float64)
             if len(A) != len(B): #skipping if arrays are different lenghts 
                 continue
             
-            #corr_coefficient = (np.mean(A*B) - np.mean(A)*np.mean(B))
-            #/(np.std(A)*np.std(B)) #calculating Pearson correlation coefficient
+            #corr_coefficient = (np.mean(A*B) - np.mean(A)*np.mean(B))/(np.std(A)*np.std(B)) #calculating Pearson correlation coefficient
             corr_coefficient = pearsonr(A,B)[0]
             
             #populating matrix depending on auto_range settings
@@ -160,24 +162,37 @@ def correlation(file, gain, auto_range=True):
 
     return matrix
 
-def ADC_event(file, chan, gain):
+def ADC_event(file, chan, gain, event_range=False):
     '''
     Plots a 2d histogram of ADC vs events for specified channel and gain
-    STILL WORKING, NOT FUNCTIONAL 
+    chan = channel #
+    gain = 1 or 0
+    event_range = (start_entry,end_entry), automatic if not specified
     '''
     data = get_root_data(file) #extracts data
     data_feb = data[(data['febChannel']==chan) & (data['gain']==gain)] #selects channel and gain
-    data_event = data_feb['iEvent'].to_numpy() 
     data_adc = data_feb['ADC'].to_numpy()
     
+    #selecting range
+    if not event_range:
+        start = 0
+        end = np.max(data_feb['iEvent'])
+    else:
+        start = event_range[0]
+        end = event_range[1] 
+    
+    #calculating adc values per event
     events = []
     adc = []
-    for i in range(900,1100,1):
+    for i in range(start,end):
         for j in range(len(data_adc[i])):
             events.append(i)
             adc.append(data_adc[i][j])
     
+    #calculating #bins
     adc_bins = int(np.max(adc) - np.min(adc))
+    
+    #plotting hist
     plt.figure(figsize=(15,12))
     plt.title(f'ADC:iEvent (gain=={gain} & febChannel=={chan})', fontsize=20)
     plt.xlabel('iEvent', fontsize=14)
@@ -186,6 +201,7 @@ def ADC_event(file, chan, gain):
     hist = plt.hist2d(events,adc,cmap=cmap,bins=[30,adc_bins], cmin=1)
     plt.colorbar()
     
+    #calcualting avg and stdev per bin
     avg_adc = []
     bin_lst = []
     std_up_adc = []
@@ -197,56 +213,13 @@ def ADC_event(file, chan, gain):
         std_down_adc.append(avg_adc[-1] - np.std(data_bin['ADC']))
         bin_lst.append(hist[1][i+1])
 
+    #plotting avg and stdev
     plt.plot(bin_lst,avg_adc,color='red', label='Mean/bin')
     plt.plot(bin_lst,std_up_adc,color='red', linestyle='--', label='Stdev/bin')
     plt.plot(bin_lst,std_down_adc,color='red', linestyle='--')
     plt.legend()
     plt.tight_layout()
     plt.savefig(f'../plots/ADC_iEvent_{chan}_{gain}.png')
-        
-    # # Set up the plot
-    # plt.figure(figsize=(13, 10))
-    # # Create a custom colormap
-    # cmap = plt.cm.viridis  # Use the 'viridis' colormap
-    # cmap.set_under(color='white', alpha=0)  # Set color for under zero counts to white and transparent
-
-    # # Plot the 2D histogram
-    # plt.imshow(hist.T, origin='lower', cmap=cmap, extent=[0, 10000, 6000, 6100], vmin=1,aspect='auto')
-    # plt.step(bin_lst,avg_adc, color='red')
-    # # Add color bar and labels
-    # plt.colorbar(label='Counts')
-    # plt.xlabel('iEevent')
-    # plt.ylabel('ADC')
-    # plt.title('ADC:iEvent{gain=1 & febChannel=20}')
-
-    # # Show the plot
-    # plt.show()
-    #print(data_feb['ADC'].to_numpy())
-    #plt.hist2d(data_feb['iEvent'].to_numpy(),data_feb['ADC'].to_numpy())
-    # ievents = []
-    # adc_h = []
-    # adc_l = []
-    # data_high = data[data['gain'] == 1]
-    # data_low = data[data['gain'] == 0]
-    # for i in range(5038):
-    #     data_event_h = data_high[data_high['iEvent'] == i]
-    #     data_event_l = data_low[data_low['iEvent'] == i]
-    #     ievents.append(i)
-    #     adc_h.append(np.mean(data_event_h['ADC']))
-    #     adc_l.append(np.mean(data_event_l['ADC']))
-    
-    # plt.figure(figsize=(12,8))
-    # plt.title('ATLAS Internal/EMF System Test')
-    # plt.xlabel('iEvent')
-    # plt.ylabel('Mean Pedestal [ADC]')
-    # plt.xlim(0,5038)
-    # plt.step(ievents,adc_h, color='pink', linewidth=2, label='High Gain')
-    # plt.step(ievents,adc_l, color='blue', linewidth=2, label='Low Gain')
-    # plt.legend()
-    # plt.tight_layout()
-    # plt.savefig('../plots/adc_ievents_test.png')
-    # plt.clf()
-        
 
 def check_bcid(file, samples):
     '''
@@ -295,50 +268,15 @@ def check_matrix(file,chan1,chan2, gain):
     data_i = data[(data['febChannel']==chan1) & (data['gain']==gain)]['ADC'].to_numpy().flatten() #taking specified channel and gain
     data_j = data[(data['febChannel']==chan2) & (data['gain']==gain)]['ADC'].to_numpy().flatten()
     
-    #getting data for first time entry for each event
-    # adc_i = []
-    # adc_j = []
-    # for adc in data_i['ADC']:
-    #     adc_i.append(adc[0])
-    # for adc in data_j['ADC']:
-    #     adc_j.append(adc[0])
-    
+    #making arrays
     A = np.array(data_i, dtype=np.float64)
     B = np.array(data_j, dtype=np.float64)
     
-    corr_coefficient = (np.mean(A*B) - np.mean(A)*np.mean(B))/(np.std(A)*np.std(B))
-    
-    # data = np.vstack((A,B)).T
-
-    # # Calculate the mean and covariance matrix
-    # mean = np.mean(data, axis=0)
-    # cov_matrix = np.cov(data, rowvar=False)
-
-    # # Calculate eigenvalues and eigenvectors
-    # eigenvalues, eigenvectors = np.linalg.eigh(cov_matrix)
-
-    # # Calculate the angle of rotation for the ellipse
-    # angle = np.arctan2(eigenvectors[1, 0], eigenvectors[0, 0]) * (180 / np.pi)
-
-    # # Calculate the width and height of the ellipse
-    # # The factor 2 is used to represent the full width and height
-    # width = 2 * np.sqrt(eigenvalues[1])  # For the larger eigenvalue
-    # height = 2 * np.sqrt(eigenvalues[0])  # For the smaller eigenvalue
-
-    # # Create a figure and axis
-    # # Create and add the ellipse
-    # ellipse = Ellipse(mean, width, height, angle=45, edgecolor='blue', facecolor='none', linewidth=2)
-    # ecent = np.sqrt(-((height/2 - width/2)**2 - 1))
-    # ecent_2 = np.sqrt(1-corr_coefficient**2)
-    # print(ecent, ecent_2)
-    # # eccentricity = np.sqrt(1-corr_coefficient)
-    # semi_major_axis = np.std(A) 
-    # semi_minor_axis = semi_major_axis * np.sqrt(1 - eccentricity**2)
-    
-    # ellipse = Ellipse((np.mean(adc_i),np.mean(adc_j)), 2*semi_major_axis, 2*semi_minor_axis,angle=45)
+    #calculating correlation coefficient 
+    corr_coefficient = pearsonr(A,B)[0]
     
     # #plotting
-    A_bins = int(np.max(A) - np.min(A))
+    A_bins = int(np.max(A) - np.min(A)) #calcualting bins
     B_bins = int(np.max(B) - np.min(B))
     plt.figure(figsize=(12,12))
     hist = plt.hist2d(A,B, bins=[A_bins,B_bins],cmin=1)
@@ -356,31 +294,55 @@ def gaussian(x, amp, mean, stddev):
 
 def coherent_noise(file, gain):
     '''
+    
     '''
     data = get_root_data(file)
-    hist_data = []
 
-    # Collect data for each channel
+    data_dic = {}
+    rms = {}
+    d_rms = {}
+    ch_noise = 0
+    d_ch_noise = 0
+    dataSum = []
     for chan in range(128):
-        data_chan = data[(data['febChannel'] == chan) & (data['gain'] == gain)]['ADC'].to_numpy().flatten()
-        hist_data.extend(data_chan - np.mean(data_chan))
-
-    # Create histogram 
-    hist, bin_edges = np.histogram(hist_data, bins=100)
-    bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
-
-    # Fit the histogram with a Gaussian
-    initial_guess = [np.max(hist), np.mean(hist_data), np.std(hist_data)]
-    popt, _ = curve_fit(gaussian, bin_centers, hist, p0=initial_guess)
-
-    # Plot the histogram and the fitted Gaussian
-    plt.figure(figsize=(13,13))
-    plt.hist(hist_data, bins=100, alpha=0.6, color='black')
-    plt.plot(bin_centers, gaussian(bin_centers, *popt), color='red', label=f'Gaussian Fit, $\mu$={round(popt[2],3)}, $\sigma$={round(popt[1],1)}', linewidth=2)
-    plt.title(f'Channels 0-127, gain: {gain}', fontsize=20)
-    plt.xlabel('ADC counts', fontsize=12)
-    plt.ylabel('Entries', fontsize=12)
-    plt.legend(fontsize=15)
-    plt.tight_layout()
-    plt.savefig(f'../plots/coherent_noise_{gain}.png')
+        data_chan = data[(data['febChannel']==chan) & (data['gain']==gain)]['ADC'].to_numpy().flatten()
+        data_dic[chan] = data_chan
+        rms[chan] = np.std(data_chan-np.mean(data_chan))
+        d_rms[chan] = rms[chan]/np.sqrt(len(data_chan))
+        ch_noise += rms[chan] ** 2
+        d_ch_noise += d_rms[chan] ** 2
+    ch_noise = np.sqrt(ch_noise)
+    d_ch_noise = np.sqrt(d_ch_noise)
+    avg_noise = ch_noise / np.sqrt(128)
+    d_avg = d_ch_noise / np.sqrt(128)
     
+    gain_df_channels = list(range(0,128))
+    data_by_channel = np.array([data_dic[ch] for ch in gain_df_channels])
+    channel_means = np.mean(data_by_channel, axis=1)
+    dataSum = np.sum([(data_dic[ch] - channel_means[i]) for i, ch in enumerate(gain_df_channels)], axis=0)
+    
+    tot_noise = np.std(dataSum)
+    mu = round(np.mean(dataSum), 3)
+    std = round(np.std(dataSum), 3)
+    
+    plt.figure(figsize=(13,13))
+    y, x, _ = plt.hist(
+        dataSum,
+        bins=np.arange(min(dataSum), max(dataSum) + 2, 1),
+        color="black",
+        edgecolor="black",
+        density=False,
+        label=rf"RMS = {np.round(tot_noise,3)}, $\mu$ = {np.round(mu,3)}, $\sigma$ = {np.round(std, 3)}",
+    )
+    
+    coh_noise = np.sqrt(tot_noise**2 - ch_noise**2) /128
+
+    pct_coh = coh_noise / avg_noise * 100
+    
+    plt.text(0.05, 0.95,f'Entries = {round(len(dataSum)/1000,1)}k\nN ch = 128\nMean = {round(mu,1)}\nRMS = {round(tot_noise,1)}\nAvg noise/ch = {round(avg_noise,1)}\nCohe noise/ch = {round(coh_noise,1)}\n[%]Cohe noise = {round(pct_coh,1)}', transform=plt.gca().transAxes,fontsize=15, verticalalignment='top', horizontalalignment='left')
+    plt.title(f'EMF system test, coherence, gain: {gain}', fontsize=20)
+    
+    plt.xlabel('ADC counts', fontsize=15)
+    plt.ylabel('Entries', fontsize=15)
+    plt.tight_layout()
+    plt.savefig(f'../plots/coherence_hist_{gain}.png')
