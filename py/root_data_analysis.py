@@ -21,7 +21,9 @@ def get_root_data(file):
         
         data = f.arrays(['iEvent', 'bcid', 'febId', 'buffChannel', 'febChannel', 'ADC', 'gain'], library='pd')
         
-    return  data
+        sorted_data = data.sort_values(by='iEvent')
+           
+    return sorted_data
 
 def EMF_system_test(file):
     '''
@@ -95,7 +97,7 @@ def EMF_system_test(file):
     plt.tight_layout()
     plt.savefig('../plots/num_entries_system_test.png')
     plt.clf()
-
+    
 def correlation(file, gain, auto_range=True):
     '''
     Produces a Pearson Correlation matrix plot for febChannels in the data set.
@@ -109,15 +111,12 @@ def correlation(file, gain, auto_range=True):
     
     #calculating correlation coefficient for all channel combinations
     for i in range(128):
-        for j in range(128):
-            data_chan_i = data[(data['febChannel']==i) & (data['gain']==gain)]['ADC'].to_numpy().flatten() #writing adc to an array
-            data_chan_j = data[(data['febChannel']==j) & (data['gain']==gain)]['ADC'].to_numpy().flatten()
+        for j in range(i + 1):
+            data_chan_i = data[(data['febChannel']==i) & (data['gain']==gain)]
+            data_chan_j = data[(data['febChannel']==j) & (data['gain']==gain)]
+            #Used if only one time entrie is desired
             
             '''
-            Used if only one time entrie is desired
-            A = []
-            B = []
-            
             #taking first time entry for each event
             for n in data_chan_i:
                 A.append(n[0])
@@ -126,9 +125,10 @@ def correlation(file, gain, auto_range=True):
             
             '''
             #creating arrays of data
-            A = np.array(data_chan_i, dtype=np.float64)
-            B = np.array(data_chan_j, dtype=np.float64)
-            if len(A) != len(B): #skipping if arrays are different lenghts 
+            A = np.array(data_chan_i['ADC'].to_numpy().flatten(), dtype=np.float64)
+            B = np.array(data_chan_j['ADC'].to_numpy().flatten(), dtype=np.float64)
+
+            if len(A) != len(B) or not np.array_equal(data_chan_i['iEvent'].to_numpy(),data_chan_j['iEvent'].to_numpy()): #skipping if arrays are different lenghts 
                 continue
             
             #corr_coefficient = (np.mean(A*B) - np.mean(A)*np.mean(B))/(np.std(A)*np.std(B)) #calculating Pearson correlation coefficient
@@ -138,8 +138,10 @@ def correlation(file, gain, auto_range=True):
             if auto_range:
                 if i != j:
                     matrix[i][j] = corr_coefficient
+                    matrix[j][i] = corr_coefficient
             else:
                 matrix[i][j] = corr_coefficient
+                matrix[j][i] = corr_coefficient
 
         print(f'{round((i/127)*100, 1)}%') #progress tracker
     
