@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from scipy.stats import pearsonr
+from scipy.stats import norm
 from scipy.optimize import curve_fit
 file_1 = "../data/output-data-fullfeb2v2-20240910.root:Data"
 
@@ -305,6 +306,7 @@ def coherent_noise(file, gain):
     rms = {}
     d_rms = {}
     ch_noise = 0
+    ch_noise_it = 0
     d_ch_noise = 0
     dataSum = []
     
@@ -312,28 +314,30 @@ def coherent_noise(file, gain):
     N_channels = np.max(data['febChannel']) + 1
     for chan in range(N_channels):
         data_chan = data[(data['febChannel']==chan) & (data['gain']==gain)]['ADC'].to_numpy().flatten()
-        data_dic[chan] = data_chan
+        data_dic[chan] = data_chan - np.mean(data_chan)
         rms[chan] = np.std(data_chan-np.mean(data_chan))
         d_rms[chan] = rms[chan]/np.sqrt(len(data_chan))
         ch_noise += rms[chan] ** 2
         d_ch_noise += d_rms[chan] ** 2
+        ch_noise_it += rms[chan]
+        
+    
     #calculating noise
     ch_noise = np.sqrt(ch_noise)
     d_ch_noise = np.sqrt(d_ch_noise)
-    avg_noise = ch_noise / np.sqrt(N_channels)
+    avg_noise_nev = ch_noise / np.sqrt(N_channels)
+    avg_noise_it = ch_noise_it/N_channels
     d_avg = d_ch_noise / np.sqrt(N_channels)
     
     #calculating hist data
-    gain_df_channels = list(range(N_channels))
-    data_by_channel = np.array([data_dic[ch] for ch in gain_df_channels])
-    channel_means = np.mean(data_by_channel, axis=1)
-    dataSum = np.sum([(data_dic[ch] - channel_means[i]) for i, ch in enumerate(gain_df_channels)], axis=0)
+    dataSum = np.sum([(data_dic[ch]) for ch in range(N_channels)], axis=0)
     
     tot_noise = np.std(dataSum)
-    mu = round(np.mean(dataSum), 3)
-    std = round(np.std(dataSum), 3)
+    mu = np.mean(dataSum)
+    std = np.std(dataSum)
     coh_noise = np.sqrt(tot_noise**2 - ch_noise**2) /N_channels
-    pct_coh = coh_noise / avg_noise * 100
+    pct_coh_nev = coh_noise / avg_noise_nev * 100
+    pct_coh_it = coh_noise / avg_noise_it * 100
     
     #plotting
     plt.figure(figsize=(13,13))
@@ -342,14 +346,57 @@ def coherent_noise(file, gain):
         bins=np.arange(min(dataSum), max(dataSum) + 2, 1),
         color="black",
         edgecolor="black",
-        density=False,
-        label=rf"RMS = {np.round(tot_noise,3)}, $\mu$ = {np.round(mu,3)}, $\sigma$ = {np.round(std, 3)}",
-    )
+        density=False)
     
-    plt.text(0.05, 0.95,f'Entries = {round(len(dataSum)/1000,1)}k\nN ch = {N_channels}\nMean = {round(mu,1)}\nRMS = {round(tot_noise,1)}\nAvg noise/ch = {round(avg_noise,1)}\nCohe noise/ch = {round(coh_noise,1)}\n[%]Cohe noise = {round(pct_coh,1)}', transform=plt.gca().transAxes,fontsize=15, verticalalignment='top', horizontalalignment='left')
-    plt.title(f'EMF system test, coherence, gain: {gain}', fontsize=20)
+    lnspc = np.linspace(min(dataSum), max(dataSum), 1000)
+    p = norm.pdf(lnspc, mu, std)
+    
+    bin_width = x[1] - x[0]
+    p *= (y.sum() * bin_width) 
+    plt.plot(lnspc, p, color='red', linewidth=2, label=f'Gauss fit, $\mu$ = {round(mu,2)}, $\sigma$ = {round(std,1)}')
+    
+    plt.text(0.05, 0.95,f'Entries = {round(len(dataSum)/1000,1)}k\nN ch = {N_channels}\nMean = {round(mu,1)}\nRMS = {round(tot_noise,1)}\n$\sigma$ inco = {round(ch_noise,1)}\nCohe noise/ch = {round(coh_noise,4)}\nAvg noise NEVIS/ch = {round(avg_noise_nev,4)}\nAvg noise Milano/ch = {round(avg_noise_it,4)}\n[%]Cohe noise NEVIS = {round(pct_coh_nev,4)}\n[%]Cohe noise Milano = {round(pct_coh_it,4)}', transform=plt.gca().transAxes,fontsize=15, verticalalignment='top', horizontalalignment='left')
+    plt.legend(fontsize=15)
+    plt.title(f'EMF system test, coherent, gain: {gain}', fontsize=20)
     
     plt.xlabel('ADC counts', fontsize=15)
     plt.ylabel('Entries', fontsize=15)
     plt.tight_layout()
     plt.savefig(f'../plots/coherence_hist_{gain}.png')
+    
+    
+def coh_corr(file,gain):
+    data = get_root_data(file) #extracting data
+    matrix = np.zeros((128,128)) #creating empty matrix
+    
+    #calculating correlation coefficient for all channel combinations
+    corr_sum = 0
+    for i in range(128):
+        for j in range(i):
+            data_chan_i = data[(data['febChannel']==i) & (data['gain']==gain)]
+            data_chan_j = data[(data['febChannel']==j) & (data['gain']==gain)]
+            #Used if only one time entrie is desired
+            
+            '''
+            #taking first time entry for each event
+            for n in data_chan_i:
+                A.append(n[0])
+            for m in data_chan_j:
+                B.append(m[0])
+            
+            '''
+            #creating arrays of data
+            A = np.array(data_chan_i['ADC'].to_numpy().flatten(), dtype=np.float64)
+            B = np.array(data_chan_j['ADC'].to_numpy().flatten(), dtype=np.float64)
+
+            if len(A) != len(B) or not np.array_equal(data_chan_i['iEvent'].to_numpy(),data_chan_j['iEvent'].to_numpy()): #skipping if arrays are different lenghts 
+                continue
+            
+            corr_coefficient = (np.mean(A*B) - np.mean(A)*np.mean(B))
+            
+            #populating matrix depending on auto_range settings
+            corr_sum += corr_coefficient
+
+        print(f'{round((i/127)*100, 1)}%') #progress tracke
+    
+    return np.sqrt(2*corr_sum)/128
