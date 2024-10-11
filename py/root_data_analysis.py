@@ -9,6 +9,8 @@ from scipy.optimize import curve_fit
 import matplotlib.colors as mcolors
 from scipy.fft import fft, fftfreq
 from matplotlib.ticker import MultipleLocator
+import json
+from matplotlib.ticker import AutoMinorLocator
 
 file_1 = "../data/output-data-fullfeb2v2-20240910.root:Data" #First data set -- data taken in 4 "chuncks"
 
@@ -16,7 +18,14 @@ file_2 = "../data/output-data-MXSX-hct20l-2024-09-18.root:Data" #Second data set
 
 file_3 = "../data/output-data-MXSX-hct20l-2024-09-23.root:Data" #Third data set -- Same as second but iEvent error corrected
 
-file_4 = "../data/output-CalibrationHG-mxhct22l-32Measurements-merged.root:Data"
+file_4 = "../data/output-data-hct22l-MDACCalib20241010.root:Data"
+
+calib_file_1 = "../data/output-CalibrationHG-mxhct22l-32Measurements-merged.root:Data"  #Fourth data set -- calibration testing with 32 measurements. Many issues such as 0 stdev on many entries.
+
+calib_file_2 = "../data/output-dataHG-mxhct22l-calibset-2024-10-07.root:Data"
+
+
+json_file_1 = "../data/calibFile-MDACCalib-2024-10-10.json"
 
 def get_root_data(file):
     '''
@@ -171,8 +180,7 @@ def correlation(file, gain, auto_range=True):
 
     return matrix    
     
-    
-def correlation_diff_event(file, gain, auto_range=True):
+def correlation_diff_event(file, gain, event):
     '''
     '''
     data = get_root_data(file) #extracting data
@@ -180,35 +188,41 @@ def correlation_diff_event(file, gain, auto_range=True):
     
     #calculating correlation coefficient for all channel combinations
     data = data[data['gain']==gain]
-    half_event = np.max(data['iEvent'])/2
+    # half_event = np.max(data['iEvent'])/2
     corr_hist = []
     for i in range(128):
         for j in range(i + 1):
-            data_chan_i = data[(data['febChannel']==i) & (data['gain']==gain) & (data['iEvent'] < half_event)]
-            data_chan_j = data[(data['febChannel']==j) & (data['gain']==gain) & (data['iEvent'] > half_event + 1) ]
+            data_chan_i = data[(data['febChannel']==i) & (data['gain']==gain)].iloc[1::2]
+            data_chan_j = data[(data['febChannel']==j) & (data['gain']==gain)].iloc[::2]
+            
+            # data_chan_i = data[(data['febChannel']==i) & (data['gain']==gain) & (data['iEvent'] < event)]
+            # data_chan_j = data[(data['febChannel']==j) & (data['gain']==gain) & (data['iEvent'] > event) & (data['iEvent'] < 2*event)]
+            
             #Used if only one time entrie is desired
 
             #creating arrays of data
             A = np.array(data_chan_i['ADC'].to_numpy().flatten(), dtype=np.float64)
             B = np.array(data_chan_j['ADC'].to_numpy().flatten(), dtype=np.float64)
+            # print(data_chan_i['iEvent'])
+            # print(data_chan_j['iEvent'])
+            # print(len(A), len(B))
+            # return
             if len(A) != len(B): #skipping if arrays are different lenghts 
                 continue
             
             #corr_coefficient = (np.mean(A*B) - np.mean(A)*np.mean(B))/(np.std(A)*np.std(B)) #calculating Pearson correlation coefficient
             corr_coefficient = pearsonr(A,B)[0]
-            
             #populating matrix depending on auto_range settings
             matrix[i][j] = corr_coefficient
             matrix[j][i] = corr_coefficient
+            
             corr_hist.append(corr_coefficient)
 
-        print(f'{round((i/127)*100, 1)}%') #progress tracker
+        #print(f'{round((i/127)*100, 1)}%') #progress tracker
     
+    N = len(A)
     #defining color range if auto_range == True
-    if auto_range:
-        max_v = max([abs(np.max(matrix)), abs(np.min(matrix))])
-    else:
-        max_v = 1
+    max_v = max([abs(np.max(matrix)), abs(np.min(matrix))])
     
     #plotting
     plt.figure(figsize=(15,15))
@@ -216,10 +230,22 @@ def correlation_diff_event(file, gain, auto_range=True):
     plt.ylim(0, 127)
     plt.xlabel('febChannel', fontsize=14)
     plt.ylabel('febChannel', fontsize=14)
-    plt.imshow(matrix, vmin=-max_v,vmax=max_v, cmap='bwr')
+    plt.tick_params(axis='both', which='major', direction='in', length=10)
+    # Set minor ticks
+    plt.tick_params(axis='both', which='minor', direction='in', length=5)
+    # Create minor ticks
+    ax = plt.gca()
+    ax.xaxis.set_minor_locator(MultipleLocator(2))  # Adjust this to control minor ticks on x-axis
+    ax.yaxis.set_minor_locator(MultipleLocator(2))  # Adjust this to control minor ticks on y-axis
+    # Add major ticks on all sides
+    ax.xaxis.set_ticks_position('both')
+    ax.yaxis.set_ticks_position('both')
+    # Create the imshow
+    plt.imshow(matrix, extent=[ 0,matrix.shape[1], matrix.shape[0],0], vmin=-max_v,vmax=max_v, cmap='bwr')
     plt.colorbar(shrink=0.785)
+    plt.tick_params(labelsize=14)
     plt.tight_layout()
-    plt.savefig(f'../plots/{auto_range}_{file.split('/')[-1]}_channel_gain{gain}_correlation_unrelate.png')
+    plt.savefig(f'../plots/{file.split('/')[-1]}_channel_gain{gain}_correlation_unrelate.png')
     plt.clf()
     
     
@@ -227,12 +253,36 @@ def correlation_diff_event(file, gain, auto_range=True):
     plt.title(f'Pearson Correlation Coefficient Histogram for Unrelated Events', fontsize=20)
     plt.xlabel('Correlation coefficient', fontsize=14)
     plt.ylabel('Entries', fontsize=14)
-    plt.hist(corr_hist, bins=70, edgecolor='black',label=f'$\sigma$ = {round(np.std(corr_hist),3)}, Mean = {round(np.mean(corr_hist),3)}')
+    plt.hist(corr_hist, bins=70, edgecolor='black',label=f'N = {N}, $\sigma$ = {round(np.std(corr_hist),3)}, Mean = {round(np.mean(corr_hist),3)}')
     plt.legend(fontsize=15)
     plt.tight_layout()
-    plt.savefig(f'../plots/corr_coeff_hist_unrelate_{gain}.png')
+    plt.savefig(f'../plots/{N}_corr_coeff_hist_unrelate_{gain}.png')
     
-    return [matrix, corr_hist]
+    return [N, np.std(corr_hist)]
+
+def corr_vs_n(events, gain):
+    ns = []
+    stds = []
+    for i in events:
+        data = correlation_diff_event(file_3, gain, i)
+        ns.append(data[0])
+        stds.append(data[1])
+        print(i)
+        
+    a = ((np.log(stds[0]) + np.log(ns[0])/2) + (np.log(stds[-1]) + np.log(ns[-1])/2))/2
+    y = lambda x: -x/2 + a
+
+    plt.figure(figsize=(13,13))
+    plt.plot(np.log(ns), np.log(stds), label='ln(RMS)')
+    plt.plot(np.log(ns),y(np.log(ns)),linestyle=':', label='$y=\\frac{-x}{2}$ ' + f'+ {round(a,2)}')
+    plt.xlabel('ln(N)', fontsize=15)
+    plt.ylabel('ln(RMS)', fontsize=15)
+    plt.title(f'ln(RMS) vs ln(N) for Correlation Coefficients of Unrelated Events, gain: {gain}', fontsize=20)
+    plt.legend(fontsize=15)
+    plt.tight_layout()
+    plt.savefig(f'../plots/{gain}_lnrms_lnN.png')
+    
+    return(ns,stds)
 
 def ADC_event(file, chan, gain, event_range=False):
     '''
@@ -565,44 +615,68 @@ def ADC_vs_measurment_perchan(file,chan, stdev=True):
     data = get_root_data(file)
     
     data_chan = data[(data['febChannel'] == chan) & (data['gain'] == 1)]
-    measures = []
-    means = []
-    rms = []
+    measure_lo = []
+    means_lo = []
+    rms_lo = []
+    measure_hi = []
+    means_hi = []
+    rms_hi = []
     
-    for meas in range(np.max(data_chan['Measurement']+1)):
+    for meas in range(1,32):
         data_meas = data_chan[data_chan['Measurement']==meas]
         ADC = data_meas['ADC'].to_numpy().flatten()
-        measures.append(meas)
-        means.append(np.mean(ADC))
-        rms.append(np.std(ADC))
-    
-    ws = []
-    for i in range(16):
-        w1 = means[i] - means[i+1]
-        w2 = means[i+15] - means[i+16]
-        ws.append((w1+w2)/2)
+        if meas == 16:
+            continue
+        elif meas%2 != 0:
+            measure_lo.append(meas)
+            means_lo.append(np.mean(ADC))
+            rms_lo.append(np.std(ADC))
+        else:
+            measure_hi.append(meas)
+            means_hi.append(np.mean(ADC))
+            rms_hi.append(np.std(ADC))
         
-    print(ws)
+    
+    # ws = []
+    # for i in range(16):
+    #     w1 = means[i] - means[i+1]
+    #     w2 = means[i+15] - means[i+16]
+    #     ws.append((w1+w2)/2)
+        
+    # print(ws)
     #plt.figure(figsize=(13,13))
     fig, ax1 = plt.subplots(figsize=(13,13))   
     ax1.set_title(f'ADC Mean per Measurement for channel {chan}', fontsize=20) 
     ax1.set_xlabel('Measurement', fontsize=15)
-    ax1.set_ylabel('Mean ADC', fontsize=15)
+    ax1.set_ylabel('Mean ADC for Hi Measurements', fontsize=15)
     ax1.set_xlim(0,31)
+    ax1.set_ylim(5820,5915)
     #ax1.set_ylim(np.min(means), np.max(means) + 40)
-    ax1.plot(measures,means,linewidth=2,label='Mean ADC')
+    ax1.scatter(measure_hi,means_hi,label='Hi Measurements', color='blue')
+    ax1.legend(loc='upper left', fontsize=15)
+    ax1.spines['left'].set_color('blue')
+    ax1.spines['left'].set_linewidth(2)
+    ax1.tick_params(labelsize=12)
+    ax2 = ax1.twinx()
+    ax2.set_ylim(2005, 2100)
+    ax2.set_ylabel('Mean ADC for Lo Measurements', fontsize=15)
+    ax2.scatter(measure_lo, means_lo, color='red', label='Lo Measurements')
+    ax2.legend(loc='upper right', fontsize=15)
+    ax2.spines['right'].set_color('red')
+    ax2.spines['right'].set_linewidth(2)
+    ax2.tick_params(labelsize=12)
     
-    if stdev:
-        ax2 = ax1.twinx()
-        #ax2.set_ylim(0,np.max(rms)+0.1)
-        ax2.plot(measures,rms,linewidth=2, color='orange', label='STDEV')
-        ax2.set_ylabel('STDEV', fontsize=15)
-        ax2.legend(loc='upper left', fontsize=15)
+    # if stdev:
+    #     ax2 = ax1.twinx()
+    #     #ax2.set_ylim(0,np.max(rms)+0.1)
+    #     ax2.plot(measures,rms,linewidth=2, color='orange', label='STDEV')
+    #     ax2.set_ylabel('STDEV', fontsize=15)
+    #     ax2.legend(loc='upper left', fontsize=15)
     
-    ax1.legend(loc='upper right', fontsize=15)
+    # ax1.legend(loc='upper right', fontsize=15)
     plt.tight_layout()
     plt.savefig(f'../plots/ADC_measure_{chan}.png')
-    plt.clf()
+    #plt.clf()
 
 
 def covariance(file):
@@ -685,15 +759,11 @@ def ADC_meas_2dhist(file):
             data_chan = data_meas[data_meas['febChannel']==chan]
             ADC = data_chan['ADC'].to_numpy().flatten()
             rms = np.std(ADC)
-            matrix[measure][chan] = rms
-            
+            matrix[measure][chan] = rms    
         mins.append(np.min(matrix[measure]))
         meas.append(measure)
-            
-    cmap = plt.cm.viridis  # Start with a predefined colormap
-    cmap = cmap(np.arange(cmap.N))
-    cmap[0] = [1, 1, 1, 1]  # RGBA for white
-    custom_cmap = mcolors.ListedColormap(cmap)
+    
+    matrix[matrix == 0] = np.nan
     plt.figure(figsize=(13, 12))
     plt.title('2D Histogram of ADC RMS for all Channels and Measurements', fontsize=22)
     plt.xlabel('febChannel', fontsize=14)
@@ -711,7 +781,7 @@ def ADC_meas_2dhist(file):
     ax.xaxis.set_ticks_position('both')
     ax.yaxis.set_ticks_position('both')
     # Create the imshow
-    plt.imshow(matrix, extent=[matrix.shape[1], 0, matrix.shape[0],0], cmap=custom_cmap, aspect=3)
+    plt.imshow(matrix, extent=[0, matrix.shape[1], matrix.shape[0],0], aspect=3)
     plt.colorbar(shrink=0.63, label='RMS')
     plt.tight_layout()
     plt.savefig(f'../plots/2dhis_measure_vs_chan_rms.png')
@@ -804,6 +874,7 @@ def FFT(file,chan,gain,sample):
     fft_result = np.fft.fft(adc_values)
     # Get the frequency bins
     frequencies = np.fft.fftfreq(N, 1/fs)
+    ln_freq = np.log(frequencies[:N//2])
 
     # Step 4: Plotting the original signal
     plt.figure(figsize=(12, 6))
@@ -819,12 +890,221 @@ def FFT(file,chan,gain,sample):
 
     # Step 5: Plot FFT results
     plt.subplot(2, 1, 2)
-    plt.plot(frequencies[:N//2], np.abs(fft_result)[:N//2])  # Plot only positive frequencies
+    plt.plot(ln_freq, np.abs(fft_result)[:N//2])
+    #plt.plot(frequencies[:N//2], np.abs(fft_result)[:50])  # Plot only positive frequencies
     plt.title('FFT of ADC Signal')
-    plt.xlabel('Frequency [Hz]')
+    
+    plt.xlabel('ln(Frequency)')
+    #plt.xlabel('Frequency [Hz]')
     plt.ylabel('Magnitude')
-    plt.xlim(0, fs / 2)  # Limit x-axis to half the sampling frequency
+    plt.xlim(0, 4.605)  # Limit x-axis to half the sampling frequency
     plt.grid()
 
     plt.tight_layout()
     plt.savefig(f'../plots/fft_{chan}_{gain}_{sample}.png')
+    
+def meas_mean_hist(file):
+    data = get_root_data(file)
+    matrix = np.zeros((32,128))
+    
+    meas_bar = []
+    measure = []
+    for meas in range(32):
+        data_meas = data[data['Measurement'] == meas]
+        meas_mean = np.mean(data_meas['ADC'])
+        meas_bar.append(meas_mean)
+        measure.append(meas)
+        for chan in range(128):
+            data_chan = data_meas[data_meas['febChannel'] == chan]
+            matrix[meas][chan] = np.mean(data_chan['ADC'] - meas_mean)
+        
+    plt.figure(figsize=(13,13))
+    plt.step(measure, meas_bar)
+    plt.title('Mean ADC vs Measurment')
+    plt.xlabel('Measurement')
+    plt.ylabel('Mean ADC')
+    plt.savefig(f'../plots/1d_mean_meas_hist.png')
+    plt.clf()
+        
+    matrix[matrix == 0] = np.nan
+    plt.figure(figsize=(13, 12))
+    plt.title('2D Histogram of Mean ADC for all Channels and Measurements', fontsize=22)
+    plt.xlabel('febChannel', fontsize=14)
+    plt.ylabel('Measurement', fontsize=14)
+    plt.ylim(0, 31)
+    # Set major ticks
+    plt.tick_params(axis='both', which='major', direction='in', length=10)
+    # Set minor ticks
+    plt.tick_params(axis='both', which='minor', direction='in', length=5)
+    # Create minor ticks
+    ax = plt.gca()
+    ax.xaxis.set_minor_locator(MultipleLocator(2))  # Adjust this to control minor ticks on x-axis
+    ax.yaxis.set_minor_locator(MultipleLocator(1))  # Adjust this to control minor ticks on y-axis
+    # Add major ticks on all sides
+    ax.xaxis.set_ticks_position('both')
+    ax.yaxis.set_ticks_position('both')
+    # Create the imshow
+    plt.imshow(matrix, extent=[0, matrix.shape[1], matrix.shape[0],0], aspect=3)
+    plt.colorbar(shrink=0.63, label='RMS')
+    plt.tight_layout()
+    plt.savefig(f'../plots/2d_mean_meas_hist.png')
+    
+    
+def MDAC_const(file, json_file=False):
+    data = get_root_data(file)
+    ws_dict = {}
+    if json_file != False:
+        with open(json_file, 'r') as f:
+            json_data = json.load(f)['protoBoardCalibs']['186974']
+
+    j = 1
+    coluta = 1
+    for chan in range(128):
+        if j == 9 and coluta == 1:
+            j = 1
+            coluta = 10
+        
+        elif j == 9:
+            j = 1
+            coluta += 1
+        
+        json_chan = json_data[f'coluta{coluta}'][f'channel{j}']['mdacVals']
+        data_chan = data[data['febChannel'] == chan]
+        ws = []
+        print(json_chan)
+        for i in range(8):
+            json_mdac = float(json_chan[f'MDACCorrectionCode{i}'])
+            w_lo = np.mean(data_chan[data_chan['Measurement'] == 2*i]['ADC']) - np.mean(data_chan[data_chan['Measurement'] == 2*i + 1]['ADC'])
+            w_hi = np.mean(data_chan[data_chan['Measurement'] == 2*i + 16]['ADC']) - np.mean(data_chan[data_chan['Measurement'] == 2*i + 17]['ADC'])
+            ws.append(float((w_lo + w_hi)/2) - json_mdac)
+        ws_dict[chan] = ws
+        j += 1
+        
+    return ws_dict
+
+def chi_2(file, file2, gain, channel=False):
+    data_1 = get_root_data(file)
+    data_2 = get_root_data(file2)
+    
+    if not channel:
+        chis_1 = []
+        chis_2 = []
+        chans = []
+        for chan in range(128):
+            data_chan = data_1[(data_1['febChannel'] == chan) & (data_1['gain'] == gain)]
+            ADC = data_chan['ADC'].to_numpy().flatten()
+            bins = np.max(ADC) - np.min(ADC)
+            hist, bin_edges = np.histogram(ADC, bins=bins, density=True)
+            bin_centers = 0.5 * (bin_edges[1:] + bin_edges[:-1])
+            initial_guess = [10000, np.mean(ADC), 1]
+            params, covariance = curve_fit(gaussian, bin_centers, hist, p0=initial_guess)
+            
+            fitted_values = []
+            for x in bin_centers:
+                fitted_values.append(gaussian(x,*params))
+            chi_squared = np.sum(((hist - fitted_values) ** 2) / fitted_values)
+            chis_1.append(chi_squared)
+            chans.append(chan)
+            
+            data_chan = data_2[(data_2['febChannel'] == chan) & (data_2['gain'] == gain)]
+            ADC = data_chan['ADC'].to_numpy().flatten()
+            bins = np.max(ADC) - np.min(ADC)
+            hist, bin_edges = np.histogram(ADC, bins=bins, density=True)
+            bin_centers = 0.5 * (bin_edges[1:] + bin_edges[:-1])
+            initial_guess = [10000, np.mean(ADC), 1]
+            params, covariance = curve_fit(gaussian, bin_centers, hist, p0=initial_guess)
+            
+            fitted_values = []
+            for x in bin_centers:
+                fitted_values.append(gaussian(x,*params))
+            chi_squared = np.sum(((hist - fitted_values) ** 2) / fitted_values)
+            chis_2.append(chi_squared)
+        if gain == 0:
+            gain_title = 'Lo'
+            
+        else:
+            gain_title = 'Hi'
+        
+        plt.figure(figsize=(13,13))
+        if np.max(chis_1) > 1 or np.max(chis_2) > 1:
+            plt.yscale('log')
+        plt.title(f'$\\chi^2_{{EMF}}$ and $\\chi^2_{{NEVIS}}$ vs febChannel, {gain_title} gain', fontsize=26)
+        plt.xlabel('febChannel', fontsize=20, loc='right')
+        plt.ylabel('$\\chi^2$', fontsize=20, loc='top')
+        plt.xlim(0,127)
+        plt.tick_params(labelsize=18, axis='both', which='major', direction='in', length=14)
+        plt.tick_params(axis='both', which='minor', direction='in', length=9)
+        ax = plt.gca()
+        ax.xaxis.set_minor_locator(MultipleLocator(2))  # Adjust this to control minor ticks on x-axis
+        ax.yaxis.set_minor_locator(AutoMinorLocator(5))  # Adjust this to control minor ticks on y-axis
+        # Add major ticks on all sides
+        ax.xaxis.set_ticks_position('both')
+        ax.yaxis.set_ticks_position('both')
+        plt.step(chans, chis_1, label=f'NEVIS calibration, mean $\\chi^2$: {round(np.mean(chis_1),3)}')
+        plt.step(chans, chis_2, label=f'EMF calibration, mean $\\chi^2$: {round(np.mean(chis_2),3)}')
+        plt.legend(fontsize=18)
+        plt.tight_layout()
+        plt.savefig(f'../plots/chi_2_{gain}.png')
+        
+        diff = np.array(chis_2) - np.array(chis_1)
+
+        plt.figure(figsize=(13,13))
+        if np.max(diff) > 1 or np.min(diff) < -1:
+            plt.ylim(-0.5, 0.5)
+        plt.title(f'$\\chi^2_{{EMF}}$ - $\\chi^2_{{NEVIS}}$ vs febChannel, {gain_title} gain', fontsize=26)
+        plt.xlabel('febChannel', fontsize=20, loc='right')
+        plt.ylabel('$\\chi^2_{{EMF}}$ - $\\chi^2_{{NEVIS}}$', fontsize=20, loc='top')
+        plt.xlim(0,127)
+        #plt.yscale('log')
+        plt.tick_params(labelsize=18, axis='both', which='major', direction='in', length=14)
+        plt.tick_params(axis='both', which='minor', direction='in', length=9)
+        ax = plt.gca()
+        ax.xaxis.set_minor_locator(MultipleLocator(2))  # Adjust this to control minor ticks on x-axis
+        ax.yaxis.set_minor_locator(AutoMinorLocator(5))  # Adjust this to control minor ticks on y-axis
+        # Add major ticks on all sides
+        ax.xaxis.set_ticks_position('both')
+        ax.yaxis.set_ticks_position('both')
+        plt.step(chans, diff)
+        #plt.yscale('log')
+        plt.legend()
+        plt.tight_layout()
+        plt.savefig(f'../plots/chi_2_diff_{gain}.png')
+        
+        return
+        
+    data_chan = data_1[(data_1['febChannel'] == channel) & (data_1['gain'] == gain)]
+    ADC = data_chan['ADC'].to_numpy().flatten()
+    bins = np.max(ADC) - np.min(ADC)
+    hist_1, bin_edges_1 = np.histogram(ADC, bins=bins, density=True)
+    bin_centers_1 = 0.5 * (bin_edges_1[1:] + bin_edges_1[:-1])
+    initial_guess = [1, np.mean(ADC), 1]
+    params, covariance = curve_fit(gaussian, bin_centers_1, hist_1, p0=initial_guess)
+    fitted_values = []
+    for x in bin_centers_1:
+        fitted_values.append(gaussian(x,*params))
+    chi_squared_1 = np.sum(((hist_1 - fitted_values) ** 2) / fitted_values)
+
+    data_chan = data_2[(data_2['febChannel'] == channel) & (data_2['gain'] == gain)]
+    ADC = data_chan['ADC'].to_numpy().flatten()
+    bins = np.max(ADC) - np.min(ADC)
+    hist_2, bin_edges_2 = np.histogram(ADC, bins=bins, density=True)
+    bin_centers_2 = 0.5 * (bin_edges_2[1:] + bin_edges_2[:-1])
+    initial_guess = [1, np.mean(ADC), 1]
+    params, covariance = curve_fit(gaussian, bin_centers_2, hist_2, p0=initial_guess)
+    fitted_values = []
+    for x in bin_centers_2:
+        fitted_values.append(gaussian(x,*params))
+    chi_squared_2 = np.sum(((hist_2 - fitted_values) ** 2) / fitted_values)
+    
+    plt.figure(figsize=(13,13))
+    plt.title(f'Channel {channel} Normalized ADC, gain: {gain}', fontsize=20)
+    plt.xlabel('ADC', fontsize=15)
+    plt.ylabel('# Entries', fontsize=15)
+    plt.tick_params(labelsize=14)
+    plt.step(bin_centers_1, hist_1, label=f'NEVIS calibration, $\\chi^2$: {round(chi_squared_1,2)}')
+    plt.step(bin_centers_2, hist_2, label=f'EMF calibration, $\\chi^2$: {round(chi_squared_2,2)}')
+    plt.legend(fontsize=15)
+    plt.tight_layout()
+    plt.savefig(f'../plots/chi_2_hist_{channel}_{gain}.png')
+    
+    return
