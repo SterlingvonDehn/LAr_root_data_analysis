@@ -11,6 +11,8 @@ from scipy.fft import fft, fftfreq
 from matplotlib.ticker import MultipleLocator
 import json
 from matplotlib.ticker import AutoMinorLocator
+from bokeh.plotting import figure, show
+from bokeh.io import output_file
 
 file_1 = "../data/output-data-fullfeb2v2-20240910.root:Data" #First data set -- data taken in 4 "chuncks"
 
@@ -18,12 +20,15 @@ file_2 = "../data/output-data-MXSX-hct20l-2024-09-18.root:Data" #Second data set
 
 file_3 = "../data/output-data-MXSX-hct20l-2024-09-23.root:Data" #Third data set -- Same as second but iEvent error corrected
 
-file_4 = "../data/output-data-hct22l-MDACCalib20241010.root:Data"
+file_4 = "../data/output-data-hct22l-MDACCalib20241010.root:Data" #Fourth data set -- EMF caibration instead of NEVIS
 
 calib_file_1 = "../data/output-CalibrationHG-mxhct22l-32Measurements-merged.root:Data"  #Fourth data set -- calibration testing with 32 measurements. Many issues such as 0 stdev on many entries.
 
 calib_file_2 = "../data/output-dataHG-mxhct22l-calibset-2024-10-07.root:Data"
 
+calib_file_3_HG = "../data/output-MDACCALIBRATION-HG-mxhct22l-2024-10-10.root:Data"
+
+calib_file_3_LG = "../data/output-MDACCALIBRATION-LG-mxhct22l-2024-10-10.root:Data"
 
 json_file_1 = "../data/calibFile-MDACCalib-2024-10-10.json"
 
@@ -75,28 +80,43 @@ def EMF_system_test(file):
     
     #plotting mean vs feb
     plt.figure(figsize=(12,8))
-    plt.title('ATLAS Internal/EMF System Test')
-    plt.xlabel('FebChannel')
-    plt.ylabel('Mean Pedestal [ADC]')
+    plt.title('ATLAS Internal/EMF System Test', fontsize=30)
+    plt.xlabel('FebChannel', fontsize=30, loc='right')
+    plt.ylabel('Mean Pedestal [ADC]', fontsize=30, loc='top')
     plt.ylim(5000,7500)
     plt.xlim(0,127)
-    plt.step(febs,ADC_mean_h, color='pink', linewidth=2, label='High Gain')
-    plt.step(febs,ADC_mean_l, color='blue', linewidth=2, label='Low Gain')
-    plt.legend()
+    plt.tick_params(labelsize=30, axis='both', which='major', direction='in', length=20)
+    plt.tick_params(axis='both', which='minor', direction='in', length=14)
+    ax = plt.gca()
+    ax.xaxis.set_minor_locator(MultipleLocator(2))  # Adjust this to control minor ticks on x-axis
+    ax.yaxis.set_minor_locator(AutoMinorLocator(5))  # Adjust this to control minor ticks on y-axis
+    # Add major ticks on all sides
+    ax.xaxis.set_ticks_position('both')
+    ax.yaxis.set_ticks_position('both')
+    plt.step(febs, ADC_mean_h, label='Hi gain', linewidth=2)
+    plt.step(febs, ADC_mean_l, label='Lo gain', linewidth=2)
+    plt.legend(fontsize=25)
     plt.tight_layout()
     plt.savefig('../plots/mean_system_test.png')
-    plt.clf()
-    
+
     #plotting stdev vs feb
     plt.figure(figsize=(12,8))
-    plt.title('ATLAS Internal/EMF System Test')
-    plt.xlabel('FebChannel')
-    plt.ylabel('Standard Deviation')
+    plt.title('ATLAS Internal/EMF System Test', fontsize=30)
+    plt.xlabel('FebChannel', fontsize=30, loc='right')
+    plt.ylabel('Standard Deveation', fontsize=30, loc='top')
     plt.ylim(0,20)
     plt.xlim(0,127)
-    plt.step(febs,ADC_std_h, color='pink', linewidth=2, label='High Gain')
-    plt.step(febs, ADC_std_l, color='blue', linewidth=2, label='Low Gain')
-    plt.legend()
+    plt.tick_params(labelsize=30, axis='both', which='major', direction='in', length=20)
+    plt.tick_params(axis='both', which='minor', direction='in', length=14)
+    ax = plt.gca()
+    ax.xaxis.set_minor_locator(MultipleLocator(2))  # Adjust this to control minor ticks on x-axis
+    ax.yaxis.set_minor_locator(AutoMinorLocator(5))  # Adjust this to control minor ticks on y-axis
+    # Add major ticks on all sides
+    ax.xaxis.set_ticks_position('both')
+    ax.yaxis.set_ticks_position('both')
+    plt.step(febs, ADC_std_h, label='Hi gain', linewidth=2)
+    plt.step(febs, ADC_std_l, label='Lo gain', linewidth=2)
+    plt.legend(fontsize=25)
     plt.tight_layout()
     plt.savefig('../plots/std_system_test.png')
     plt.clf()
@@ -167,20 +187,39 @@ def correlation(file, gain, auto_range=True):
     else:
         max_v = 1
     
+    if gain == 0:
+        gain_title = 'Lo'
+    else:
+        gain_title = 'Hi'
+    
     #plotting
     plt.figure(figsize=(15,15))
-    plt.title(f'FebChannel Pearson Correlation Coefficient Matrix, gain: {gain}', fontsize=20)
+    plt.title(f'febChannel Correlation, {gain_title} gain', fontsize=30)
     plt.ylim(0, 127)
-    plt.xlabel('febChannel', fontsize=14)
-    plt.ylabel('febChannel', fontsize=14)
-    plt.imshow(matrix, vmin=-max_v,vmax=max_v, cmap='bwr')
-    plt.colorbar(shrink=0.785)
+    plt.xlabel('febChannel', fontsize=30, loc='right')
+    plt.ylabel('febChannel', fontsize=30, loc='top')
+    plt.tick_params(axis='both', which='major', direction='in', length=20)
+    # Set minor ticks
+    plt.tick_params(axis='both', which='minor', direction='in', length=15)
+    # Create minor ticks
+    ax = plt.gca()
+    ax.xaxis.set_minor_locator(MultipleLocator(2))  # Adjust this to control minor ticks on x-axis
+    ax.yaxis.set_minor_locator(MultipleLocator(2))  # Adjust this to control minor ticks on y-axis
+    # Add major ticks on all sides
+    ax.xaxis.set_ticks_position('both')
+    ax.yaxis.set_ticks_position('both')
+    # Create the imshow
+    plt.imshow(matrix, extent=[ 0,matrix.shape[1], matrix.shape[0],0], vmin=-max_v,vmax=max_v, cmap='bwr')
+    cbar = plt.colorbar(shrink=0.78)
+    cbar.ax.tick_params(labelsize=20)  # Set the fontsize for the colorbar ticks
+    cbar.set_label('Correlation Coeff', fontsize=30)
+    plt.tick_params(labelsize=25)
     plt.tight_layout()
     plt.savefig(f'../plots/{auto_range}_{file.split('/')[-1]}_channel_gain{gain}_correlation_fullavg.png')
 
     return matrix    
     
-def correlation_diff_event(file, gain, event):
+def correlation_diff_event(file, gain):
     '''
     '''
     data = get_root_data(file) #extracting data
@@ -218,21 +257,26 @@ def correlation_diff_event(file, gain, event):
             
             corr_hist.append(corr_coefficient)
 
-        #print(f'{round((i/127)*100, 1)}%') #progress tracker
+        print(f'{round((i/127)*100, 1)}%') #progress tracker
     
     N = len(A)
     #defining color range if auto_range == True
     max_v = max([abs(np.max(matrix)), abs(np.min(matrix))])
     
+    if gain == 0:
+        gain_title = 'Lo'
+    else:
+        gain_title = 'Hi'
+    
     #plotting
     plt.figure(figsize=(15,15))
-    plt.title(f'FebChannel Pearson Correlation Coefficient Matrix for Unrelated Events, gain: {gain}', fontsize=20)
+    plt.title(f'febChannel Correlation Unrelated, {gain_title} gain', fontsize=30)
     plt.ylim(0, 127)
-    plt.xlabel('febChannel', fontsize=14)
-    plt.ylabel('febChannel', fontsize=14)
-    plt.tick_params(axis='both', which='major', direction='in', length=10)
+    plt.xlabel('febChannel', fontsize=30, loc='right')
+    plt.ylabel('febChannel', fontsize=30, loc='top')
+    plt.tick_params(axis='both', which='major', direction='in', length=20)
     # Set minor ticks
-    plt.tick_params(axis='both', which='minor', direction='in', length=5)
+    plt.tick_params(axis='both', which='minor', direction='in', length=15)
     # Create minor ticks
     ax = plt.gca()
     ax.xaxis.set_minor_locator(MultipleLocator(2))  # Adjust this to control minor ticks on x-axis
@@ -242,19 +286,29 @@ def correlation_diff_event(file, gain, event):
     ax.yaxis.set_ticks_position('both')
     # Create the imshow
     plt.imshow(matrix, extent=[ 0,matrix.shape[1], matrix.shape[0],0], vmin=-max_v,vmax=max_v, cmap='bwr')
-    plt.colorbar(shrink=0.785)
-    plt.tick_params(labelsize=14)
+    cbar = plt.colorbar(shrink=0.78)
+    cbar.ax.tick_params(labelsize=20)  # Set the fontsize for the colorbar ticks
+    cbar.set_label('Correlation Coeff', fontsize=30)
+    plt.tick_params(labelsize=25)
     plt.tight_layout()
     plt.savefig(f'../plots/{file.split('/')[-1]}_channel_gain{gain}_correlation_unrelate.png')
-    plt.clf()
     
     
-    plt.figure(figsize=(15,15))
-    plt.title(f'Pearson Correlation Coefficient Histogram for Unrelated Events', fontsize=20)
-    plt.xlabel('Correlation coefficient', fontsize=14)
-    plt.ylabel('Entries', fontsize=14)
+    plt.figure(figsize=(12,9))
+    plt.title(f'Correlation Coefficients, {gain_title} gain', fontsize=30)
+    plt.xlabel('Correlation Coefficients', fontsize=30, loc='right')
+    plt.ylabel('# Entries', fontsize=30, loc='top')
+    #plt.yscale('log')
+    plt.tick_params(labelsize=30, axis='both', which='major', direction='in', length=20)
+    plt.tick_params(axis='both', which='minor', direction='in', length=14)
+    ax = plt.gca()
+    ax.xaxis.set_minor_locator(MultipleLocator(2))  # Adjust this to control minor ticks on x-axis
+    ax.yaxis.set_minor_locator(AutoMinorLocator(5))  # Adjust this to control minor ticks on y-axis
+    # Add major ticks on all sides
+    ax.xaxis.set_ticks_position('both')
+    ax.yaxis.set_ticks_position('both')
     plt.hist(corr_hist, bins=70, edgecolor='black',label=f'N = {N}, $\sigma$ = {round(np.std(corr_hist),3)}, Mean = {round(np.mean(corr_hist),3)}')
-    plt.legend(fontsize=15)
+    plt.legend(fontsize=25)
     plt.tight_layout()
     plt.savefig(f'../plots/{N}_corr_coeff_hist_unrelate_{gain}.png')
     
@@ -513,8 +567,12 @@ def coherent_noise(file, gain):
     pct_coh_nev = coh_noise / avg_noise_nev * 100
     pct_coh_it = coh_noise / avg_noise_it * 100
     
+    if gain == 0:
+        gain_title = 'Lo'
+    else:
+        gain_title = 'Hi'
     #plotting
-    plt.figure(figsize=(13,13))
+    plt.figure(figsize=(15,11))
     y, x, _ = plt.hist(
         dataSum,
         bins=np.arange(min(dataSum), max(dataSum) + 2, 1),
@@ -528,13 +586,20 @@ def coherent_noise(file, gain):
     bin_width = x[1] - x[0]
     p *= (y.sum() * bin_width) 
     plt.plot(lnspc, p, color='red', linewidth=2, label=f'Gauss fit, $\mu$ = {round(mu,2)}, $\sigma$ = {round(std,1)}')
+    plt.tick_params(labelsize=30, axis='both', which='major', direction='in', length=20)
+    plt.tick_params(axis='both', which='minor', direction='in', length=14)
+    ax = plt.gca()
+    ax.xaxis.set_minor_locator(AutoMinorLocator(5))  # Adjust this to control minor ticks on x-axis
+    ax.yaxis.set_minor_locator(AutoMinorLocator(5))  # Adjust this to control minor ticks on y-axis
+    # Add major ticks on all sides
+    ax.xaxis.set_ticks_position('both')
+    ax.yaxis.set_ticks_position('both')
+    plt.text(0.05, 0.95,f'Entries = {round(len(dataSum)/1000,1)}k\nN ch = {N_channels}\nMean = {round(mu,1)}\nRMS = {round(tot_noise,1)}\n$\sigma$ inco = {round(ch_noise,1)}\nCohe noise/ch = {round(coh_noise,4)}\nAvg noise NEVIS/ch = {round(avg_noise_nev,4)}\nAvg noise Milano/ch = {round(avg_noise_it,4)}\n[%]Cohe noise NEVIS = {round(pct_coh_nev,4)}\n[%]Cohe noise Milano = {round(pct_coh_it,4)}', transform=plt.gca().transAxes,fontsize=20, verticalalignment='top', horizontalalignment='left')
+    plt.legend(fontsize=20)
+    plt.title(f'EMF system test, coherent, {gain_title} gain', fontsize=30)
     
-    plt.text(0.05, 0.95,f'Entries = {round(len(dataSum)/1000,1)}k\nN ch = {N_channels}\nMean = {round(mu,1)}\nRMS = {round(tot_noise,1)}\n$\sigma$ inco = {round(ch_noise,1)}\nCohe noise/ch = {round(coh_noise,4)}\nAvg noise NEVIS/ch = {round(avg_noise_nev,4)}\nAvg noise Milano/ch = {round(avg_noise_it,4)}\n[%]Cohe noise NEVIS = {round(pct_coh_nev,4)}\n[%]Cohe noise Milano = {round(pct_coh_it,4)}', transform=plt.gca().transAxes,fontsize=15, verticalalignment='top', horizontalalignment='left')
-    plt.legend(fontsize=15)
-    plt.title(f'EMF system test, coherent, gain: {gain}', fontsize=20)
-    
-    plt.xlabel('ADC counts', fontsize=15)
-    plt.ylabel('Entries', fontsize=15)
+    plt.xlabel('ADC counts', fontsize=30, loc='right')
+    plt.ylabel('Entries', fontsize=30, loc='top')
     plt.tight_layout()
     plt.savefig(f'../plots/coherence_hist_{gain}.png')
     
@@ -592,9 +657,17 @@ def ADC_vs_chan_permeasure(file, stdev=True):
             
         #plt.figure(figsize=(13,13))
         fig, ax1 = plt.subplots(figsize=(13,13))   
-        ax1.set_title(f'ADC Mean per Channel for Measurement {measure}', fontsize=20) 
-        ax1.set_xlabel('febChannel', fontsize=15)
-        ax1.set_ylabel('Mean ADC', fontsize=15)
+        plt.tick_params(labelsize=30, axis='both', which='major', direction='in', length=20)
+        plt.tick_params(axis='both', which='minor', direction='in', length=14)
+        ax = plt.gca()
+        ax.xaxis.set_minor_locator(MultipleLocator(2))  # Adjust this to control minor ticks on x-axis
+        ax.yaxis.set_minor_locator(AutoMinorLocator(5))  # Adjust this to control minor ticks on y-axis
+        # Add major ticks on all sides
+        ax.xaxis.set_ticks_position('both')
+        ax.yaxis.set_ticks_position('both')
+        ax1.set_title(f'ADC Mean per Channel for Measurement {measure}', fontsize=30) 
+        ax1.set_xlabel('febChannel', fontsize=30, loc='right')
+        ax1.set_ylabel('Mean ADC', fontsize=30, loc='top')
         ax1.set_xlim(0,127)
         ax1.set_ylim(np.min(means), np.max(means) + 40)
         ax1.step(chans,means,linewidth=2,label='Mean ADC')
@@ -621,10 +694,12 @@ def ADC_vs_measurment_perchan(file,chan, stdev=True):
     measure_hi = []
     means_hi = []
     rms_hi = []
+    means = []
     
-    for meas in range(1,32):
+    for meas in range(32):
         data_meas = data_chan[data_chan['Measurement']==meas]
         ADC = data_meas['ADC'].to_numpy().flatten()
+        means.append(np.mean(ADC))
         if meas == 16:
             continue
         elif meas%2 != 0:
@@ -644,27 +719,43 @@ def ADC_vs_measurment_perchan(file,chan, stdev=True):
     #     ws.append((w1+w2)/2)
         
     # print(ws)
-    #plt.figure(figsize=(13,13))
-    fig, ax1 = plt.subplots(figsize=(13,13))   
-    ax1.set_title(f'ADC Mean per Measurement for channel {chan}', fontsize=20) 
-    ax1.set_xlabel('Measurement', fontsize=15)
-    ax1.set_ylabel('Mean ADC for Hi Measurements', fontsize=15)
-    ax1.set_xlim(0,31)
-    ax1.set_ylim(5820,5915)
-    #ax1.set_ylim(np.min(means), np.max(means) + 40)
-    ax1.scatter(measure_hi,means_hi,label='Hi Measurements', color='blue')
-    ax1.legend(loc='upper left', fontsize=15)
-    ax1.spines['left'].set_color('blue')
-    ax1.spines['left'].set_linewidth(2)
-    ax1.tick_params(labelsize=12)
-    ax2 = ax1.twinx()
-    ax2.set_ylim(2005, 2100)
-    ax2.set_ylabel('Mean ADC for Lo Measurements', fontsize=15)
-    ax2.scatter(measure_lo, means_lo, color='red', label='Lo Measurements')
-    ax2.legend(loc='upper right', fontsize=15)
-    ax2.spines['right'].set_color('red')
-    ax2.spines['right'].set_linewidth(2)
-    ax2.tick_params(labelsize=12)
+    plt.figure(figsize=(15,12))
+    plt.tick_params(labelsize=30, axis='both', which='major', direction='in', length=20)
+    plt.tick_params(axis='both', which='minor', direction='in', length=14)
+    ax = plt.gca()
+    ax.xaxis.set_minor_locator(MultipleLocator(2))  # Adjust this to control minor ticks on x-axis
+    ax.yaxis.set_minor_locator(AutoMinorLocator(5))  # Adjust this to control minor ticks on y-axis
+    # Add major ticks on all sides
+    ax.xaxis.set_ticks_position('both')
+    ax.yaxis.set_ticks_position('both')
+    plt.xlim(0,31)
+    plt.title(f'ADC Mean per Measurement for channel {chan}', fontsize=30)
+    plt.xlabel('Measurement', fontsize=30, loc='right')
+    plt.ylabel('Mean ADC', fontsize=30, loc='top')
+    plt.plot(list(range(32)), means, label='Mean ADC')
+    plt.legend(fontsize=20)
+    plt.tight_layout()
+    plt.savefig(f'../plots/ADC_vs_measure_{chan}.png')
+    # fig, ax1 = plt.subplots(figsize=(13,13))   
+    # ax1.set_title(f'ADC Mean per Measurement for channel {chan}', fontsize=20) 
+    # ax1.set_xlabel('Measurement', fontsize=15)
+    # ax1.set_ylabel('Mean ADC for Hi Measurements', fontsize=15)
+    # ax1.set_xlim(0,31)
+    # ax1.set_ylim(5820,5915)
+    # #ax1.set_ylim(np.min(means), np.max(means) + 40)
+    # ax1.scatter(measure_hi,means_hi,label='Hi Measurements', color='blue')
+    # ax1.legend(loc='upper left', fontsize=15)
+    # ax1.spines['left'].set_color('blue')
+    # ax1.spines['left'].set_linewidth(2)
+    # ax1.tick_params(labelsize=12)
+    # ax2 = ax1.twinx()
+    # ax2.set_ylim(2005, 2100)
+    # ax2.set_ylabel('Mean ADC for Lo Measurements', fontsize=15)
+    # ax2.scatter(measure_lo, means_lo, color='red', label='Lo Measurements')
+    # ax2.legend(loc='upper right', fontsize=15)
+    # ax2.spines['right'].set_color('red')
+    # ax2.spines['right'].set_linewidth(2)
+    # ax2.tick_params(labelsize=12)
     
     # if stdev:
     #     ax2 = ax1.twinx()
@@ -674,8 +765,6 @@ def ADC_vs_measurment_perchan(file,chan, stdev=True):
     #     ax2.legend(loc='upper left', fontsize=15)
     
     # ax1.legend(loc='upper right', fontsize=15)
-    plt.tight_layout()
-    plt.savefig(f'../plots/ADC_measure_{chan}.png')
     #plt.clf()
 
 
@@ -754,7 +843,7 @@ def ADC_meas_2dhist(file):
     mins = []
     meas = []
     for measure in range(32):
-        data_meas = data[(data['Measurement'] == measure) & (data['gain'] == 1)]
+        data_meas = data[(data['Measurement'] == measure)]
         for chan in range(np.max(data_meas['febChannel']+1)):
             data_chan = data_meas[data_meas['febChannel']==chan]
             ADC = data_chan['ADC'].to_numpy().flatten()
@@ -764,15 +853,24 @@ def ADC_meas_2dhist(file):
         meas.append(measure)
     
     matrix[matrix == 0] = np.nan
-    plt.figure(figsize=(13, 12))
-    plt.title('2D Histogram of ADC RMS for all Channels and Measurements', fontsize=22)
-    plt.xlabel('febChannel', fontsize=14)
-    plt.ylabel('Measurement', fontsize=14)
+    # output_file("image_plot.html")
+
+    # p = figure(title="2D Image Plot", x_range=(0, 127), y_range=(0, 31),
+    #        toolbar_location=None, tools="")
+    # p.image(image=[matrix], x=0, y=0, dw=127, dh=31, palette="Spectral11")
+    # show(p)
+
+
+    
+    plt.figure(figsize=(15, 12))
+    plt.title('ADC RMS for all Channels and Measurements', fontsize=30)
+    plt.xlabel('febChannel', fontsize=30, loc='right')
+    plt.ylabel('Measurement', fontsize=30, loc='top')
     plt.ylim(0, 31)
     # Set major ticks
-    plt.tick_params(axis='both', which='major', direction='in', length=10)
+    plt.tick_params(labelsize=30, axis='both', which='major', direction='in', length=20)
     # Set minor ticks
-    plt.tick_params(axis='both', which='minor', direction='in', length=5)
+    plt.tick_params(axis='both', which='minor', direction='in', length=15)
     # Create minor ticks
     ax = plt.gca()
     ax.xaxis.set_minor_locator(MultipleLocator(2))  # Adjust this to control minor ticks on x-axis
@@ -782,20 +880,22 @@ def ADC_meas_2dhist(file):
     ax.yaxis.set_ticks_position('both')
     # Create the imshow
     plt.imshow(matrix, extent=[0, matrix.shape[1], matrix.shape[0],0], aspect=3)
-    plt.colorbar(shrink=0.63, label='RMS')
+    cbar = plt.colorbar(shrink=0.69)
+    cbar.ax.tick_params(labelsize=20)  # Set the fontsize for the colorbar ticks
+    cbar.set_label('RMS', fontsize=30)
     plt.tight_layout()
     plt.savefig(f'../plots/2dhis_measure_vs_chan_rms.png')
     plt.clf()
     
-    plt.figure(figsize=(13,12))
-    plt.title('Min ADC RMS for all channels per Measurement')
-    plt.xlabel('Measurement')
-    plt.ylabel('Min ADC RMS')
-    plt.xlim(0,31)
-    plt.step(meas,mins)
-    plt.tight_layout()
-    plt.savefig(f'../plots/minrms_vs_meas.png')
-    plt.clf()
+    # plt.figure(figsize=(13,12))
+    # plt.title('Min ADC RMS for all channels per Measurement')
+    # plt.xlabel('Measurement')
+    # plt.ylabel('Min ADC RMS')
+    # plt.xlim(0,31)
+    # plt.step(meas,mins)
+    # plt.tight_layout()
+    # plt.savefig(f'../plots/minrms_vs_meas.png')
+    # plt.clf()
     
     return matrix
 
@@ -861,8 +961,9 @@ def FFT(file,chan,gain,sample):
         signal.append(entry[sample])
     
     adc_values = []
-    for i in signal:
-        adc_values.append(i - np.mean(signal))
+    # for i in signal:
+    #     adc_values.append(i - np.mean(signal))
+    adc_values = signal
      
     fs = 200  # Sampling frequency in Hz
     N = len(adc_values)  # Number of samples
@@ -876,28 +977,48 @@ def FFT(file,chan,gain,sample):
     frequencies = np.fft.fftfreq(N, 1/fs)
     ln_freq = np.log(frequencies[:N//2])
 
+    if gain == 0:
+        gain_title = 'Lo'
+    else:
+        gain_title = 'Hi'    
     # Step 4: Plotting the original signal
-    plt.figure(figsize=(12, 6))
+    plt.figure(figsize=(15, 10))
 
     # Plot original signal
     plt.subplot(2, 1, 1)
+    plt.tick_params(labelsize=30, axis='both', which='major', direction='in', length=20)
+    plt.tick_params(axis='both', which='minor', direction='in', length=14)
+    ax = plt.gca()
+    ax.xaxis.set_minor_locator(MultipleLocator(2))  # Adjust this to control minor ticks on x-axis
+    ax.yaxis.set_minor_locator(AutoMinorLocator(5))  # Adjust this to control minor ticks on y-axis
+    # Add major ticks on all sides
+    ax.xaxis.set_ticks_position('both')
+    ax.yaxis.set_ticks_position('both')
     plt.plot(t, adc_values)
-    plt.title(f'ADC Signal for channel {chan}, gain {gain}, time sample {sample}')
-    plt.xlabel('Time [s]')
-    plt.ylabel('ADC Value')
+    plt.title(f'ADC Signal for channel {chan}, {gain_title} gain, time sample {sample}',fontsize=25)
+    plt.xlabel('Time [s]',fontsize=25)
+    plt.ylabel('ADC Value',fontsize=25)
     plt.xlim(0,t[-1])
     plt.grid()
 
     # Step 5: Plot FFT results
     plt.subplot(2, 1, 2)
-    plt.plot(ln_freq, np.abs(fft_result)[:N//2])
+    plt.tick_params(labelsize=30, axis='both', which='major', direction='in', length=20)
+    plt.tick_params(axis='both', which='minor', direction='in', length=14)
+    ax = plt.gca()
+    ax.xaxis.set_minor_locator(MultipleLocator(2))  # Adjust this to control minor ticks on x-axis
+    ax.yaxis.set_minor_locator(AutoMinorLocator(5))  # Adjust this to control minor ticks on y-axis
+    # Add major ticks on all sides
+    ax.xaxis.set_ticks_position('both')
+    ax.yaxis.set_ticks_position('both')
+    plt.plot(frequencies[1:N//2], np.abs(fft_result)[1:N//2])
     #plt.plot(frequencies[:N//2], np.abs(fft_result)[:50])  # Plot only positive frequencies
-    plt.title('FFT of ADC Signal')
+    plt.title('FFT of ADC Signal',fontsize=25)
     
-    plt.xlabel('ln(Frequency)')
+    plt.xlabel('Frequency [Hz]',fontsize=25)
     #plt.xlabel('Frequency [Hz]')
-    plt.ylabel('Magnitude')
-    plt.xlim(0, 4.605)  # Limit x-axis to half the sampling frequency
+    plt.ylabel('Magnitude',fontsize=25)
+    plt.xlim(0, 100)  # Limit x-axis to half the sampling frequency
     plt.grid()
 
     plt.tight_layout()
@@ -971,7 +1092,6 @@ def MDAC_const(file, json_file=False):
         json_chan = json_data[f'coluta{coluta}'][f'channel{j}']['mdacVals']
         data_chan = data[data['febChannel'] == chan]
         ws = []
-        print(json_chan)
         for i in range(8):
             json_mdac = float(json_chan[f'MDACCorrectionCode{i}'])
             w_lo = np.mean(data_chan[data_chan['Measurement'] == 2*i]['ADC']) - np.mean(data_chan[data_chan['Measurement'] == 2*i + 1]['ADC'])
@@ -1025,15 +1145,15 @@ def chi_2(file, file2, gain, channel=False):
         else:
             gain_title = 'Hi'
         
-        plt.figure(figsize=(13,13))
+        plt.figure(figsize=(12,9))
         if np.max(chis_1) > 1 or np.max(chis_2) > 1:
             plt.yscale('log')
-        plt.title(f'$\\chi^2_{{EMF}}$ and $\\chi^2_{{NEVIS}}$ vs febChannel, {gain_title} gain', fontsize=26)
-        plt.xlabel('febChannel', fontsize=20, loc='right')
-        plt.ylabel('$\\chi^2$', fontsize=20, loc='top')
+        plt.title(f'$\\chi^2_{{EMF}}$ and $\\chi^2_{{NEVIS}}$ vs febChannel, {gain_title} gain', fontsize=30)
+        plt.xlabel('febChannel', fontsize=30, loc='right')
+        plt.ylabel('$\\chi^2$', fontsize=30, loc='top')
         plt.xlim(0,127)
-        plt.tick_params(labelsize=18, axis='both', which='major', direction='in', length=14)
-        plt.tick_params(axis='both', which='minor', direction='in', length=9)
+        plt.tick_params(labelsize=30, axis='both', which='major', direction='in', length=20)
+        plt.tick_params(axis='both', which='minor', direction='in', length=14)
         ax = plt.gca()
         ax.xaxis.set_minor_locator(MultipleLocator(2))  # Adjust this to control minor ticks on x-axis
         ax.yaxis.set_minor_locator(AutoMinorLocator(5))  # Adjust this to control minor ticks on y-axis
@@ -1042,22 +1162,22 @@ def chi_2(file, file2, gain, channel=False):
         ax.yaxis.set_ticks_position('both')
         plt.step(chans, chis_1, label=f'NEVIS calibration, mean $\\chi^2$: {round(np.mean(chis_1),3)}')
         plt.step(chans, chis_2, label=f'EMF calibration, mean $\\chi^2$: {round(np.mean(chis_2),3)}')
-        plt.legend(fontsize=18)
+        plt.legend(fontsize=25)
         plt.tight_layout()
         plt.savefig(f'../plots/chi_2_{gain}.png')
         
         diff = np.array(chis_2) - np.array(chis_1)
 
-        plt.figure(figsize=(13,13))
+        plt.figure(figsize=(12,9))
         if np.max(diff) > 1 or np.min(diff) < -1:
             plt.ylim(-0.5, 0.5)
-        plt.title(f'$\\chi^2_{{EMF}}$ - $\\chi^2_{{NEVIS}}$ vs febChannel, {gain_title} gain', fontsize=26)
-        plt.xlabel('febChannel', fontsize=20, loc='right')
-        plt.ylabel('$\\chi^2_{{EMF}}$ - $\\chi^2_{{NEVIS}}$', fontsize=20, loc='top')
+        plt.title(f'$\\chi^2_{{EMF}}$ - $\\chi^2_{{NEVIS}}$ vs febChannel, {gain_title} gain', fontsize=30)
+        plt.xlabel('febChannel', fontsize=30, loc='right')
+        plt.ylabel('$\\chi^2_{{EMF}}$ - $\\chi^2_{{NEVIS}}$', fontsize=30, loc='top')
         plt.xlim(0,127)
         #plt.yscale('log')
-        plt.tick_params(labelsize=18, axis='both', which='major', direction='in', length=14)
-        plt.tick_params(axis='both', which='minor', direction='in', length=9)
+        plt.tick_params(labelsize=30, axis='both', which='major', direction='in', length=20)
+        plt.tick_params(axis='both', which='minor', direction='in', length=14)
         ax = plt.gca()
         ax.xaxis.set_minor_locator(MultipleLocator(2))  # Adjust this to control minor ticks on x-axis
         ax.yaxis.set_minor_locator(AutoMinorLocator(5))  # Adjust this to control minor ticks on y-axis
@@ -1073,11 +1193,11 @@ def chi_2(file, file2, gain, channel=False):
         return
         
     data_chan = data_1[(data_1['febChannel'] == channel) & (data_1['gain'] == gain)]
-    ADC = data_chan['ADC'].to_numpy().flatten()
-    bins = np.max(ADC) - np.min(ADC)
-    hist_1, bin_edges_1 = np.histogram(ADC, bins=bins, density=True)
+    ADC1 = data_chan['ADC'].to_numpy().flatten()
+    bins = np.max(ADC1) - np.min(ADC1)
+    hist_1, bin_edges_1 = np.histogram(ADC1, bins=bins, density=False)
     bin_centers_1 = 0.5 * (bin_edges_1[1:] + bin_edges_1[:-1])
-    initial_guess = [1, np.mean(ADC), 1]
+    initial_guess = [1, np.mean(ADC1), 1]
     params, covariance = curve_fit(gaussian, bin_centers_1, hist_1, p0=initial_guess)
     fitted_values = []
     for x in bin_centers_1:
@@ -1085,17 +1205,18 @@ def chi_2(file, file2, gain, channel=False):
     chi_squared_1 = np.sum(((hist_1 - fitted_values) ** 2) / fitted_values)
 
     data_chan = data_2[(data_2['febChannel'] == channel) & (data_2['gain'] == gain)]
-    ADC = data_chan['ADC'].to_numpy().flatten()
-    bins = np.max(ADC) - np.min(ADC)
-    hist_2, bin_edges_2 = np.histogram(ADC, bins=bins, density=True)
+    ADC2 = data_chan['ADC'].to_numpy().flatten()
+    bins = np.max(ADC2) - np.min(ADC2)
+    hist_2, bin_edges_2 = np.histogram(ADC2, bins=bins, density=False)
     bin_centers_2 = 0.5 * (bin_edges_2[1:] + bin_edges_2[:-1])
-    initial_guess = [1, np.mean(ADC), 1]
+    initial_guess = [1, np.mean(ADC2), 1]
     params, covariance = curve_fit(gaussian, bin_centers_2, hist_2, p0=initial_guess)
     fitted_values = []
     for x in bin_centers_2:
         fitted_values.append(gaussian(x,*params))
     chi_squared_2 = np.sum(((hist_2 - fitted_values) ** 2) / fitted_values)
     
+    print(np.mean(ADC2),np.median(ADC2))
     plt.figure(figsize=(13,13))
     plt.title(f'Channel {channel} Normalized ADC, gain: {gain}', fontsize=20)
     plt.xlabel('ADC', fontsize=15)
@@ -1108,3 +1229,263 @@ def chi_2(file, file2, gain, channel=False):
     plt.savefig(f'../plots/chi_2_hist_{channel}_{gain}.png')
     
     return
+
+def check_calibration(file1,file2,gain):
+    data_1 = get_root_data(file1)
+    data_2 = get_root_data(file2)
+    
+    rms_1 = []
+    rms_2 = []
+    mean_1 = []
+    mean_2 = []
+    N = []
+    for chan in range(128):
+        data_chan_1 = data_1[(data_1['febChannel'] == chan) & (data_1['gain'] == gain)]
+        data_chan_2 = data_2[(data_2['febChannel'] == chan) & (data_2['gain'] == gain)]
+        
+        rms_1.append(np.std(data_chan_1['ADC']))
+        rms_2.append(np.std(data_chan_2['ADC']))
+        mean_1.append(np.mean(data_chan_1['ADC']))
+        mean_2.append(np.mean(data_chan_2['ADC']))
+        N.append(len(data_chan_2['ADC'].to_numpy().flatten()))
+    
+    rms_1 = np.array(rms_1)
+    rms_2 = np.array(rms_2)
+    mean_1 = np.array(mean_1)
+    mean_2 = np.array(mean_2)
+    N = np.array(N)
+    
+    rms_diff = rms_1 - rms_2
+    rms_err = np.sqrt((rms_1**2 + rms_2**2)/(2*N))
+    mean_diff = np.array(mean_1) - np.array(mean_2)
+    mean_err = np.sqrt((rms_1**2 + rms_2**2)/(N))
+    
+    if gain == 0:
+        gain_title = 'Lo'
+        
+    else:
+        gain_title = 'Hi'
+    
+    output_file(f'../plots/calib_rms_check_{gain}.html')
+    chans = list(range(128))
+    p1 = figure(title=f"Delta ADC RMS per febChannel, {gain_title} gain",
+           x_axis_label=r"febChannel",
+           y_axis_label=r"Delta ADC RMS",
+           width=800, 
+           height=700)
+
+    for i in range(len(chans)):
+        p1.segment(x0=chans[i], y0=rms_diff[i] - rms_err[i], x1=chans[i], y1=rms_diff[i] + rms_err[i], line_width=2, line_color='red')
+    
+    avg_rms = [np.mean(rms_diff) for i in range(128)]
+    
+    zeros = [0 for i in range(128)]
+    
+    
+    
+    p1.line(chans,avg_rms,  legend_label=f'Average Delta ADC RMS: {round(avg_rms[0],2)}', line_dash='dashed', line_color='red')
+    p1.line(chans,zeros, legend_label='ADC RMS = 0', line_dash='dashed')
+    
+    # Step 4: Add scatter points
+    p1.scatter(chans, rms_diff, size=5, color='navy', alpha=0.5, legend_label='Delta ADC RMS')
+    show(p1)
+    
+    output_file(f'../plots/calib_mean_check_{gain}.html')
+    p2 = figure(title=f"Delta Mean ADC per febChannel, {gain_title} gain",
+           x_axis_label=r"febChannel",
+           y_axis_label=r"Delta Mean ADC",
+           width=800, 
+           height=700)
+
+    for i in range(len(chans)):
+        p2.segment(x0=chans[i], y0=mean_diff[i] - mean_err[i], x1=chans[i], y1=mean_diff[i] + mean_err[i], line_width=2, line_color='red')
+    
+    
+    zeros = [0 for i in range(128)]
+    
+    p2.line(chans,zeros, legend_label='ADC RMS = 0', line_dash='dashed')
+    
+    # Step 4: Add scatter points
+    p2.scatter(chans, mean_diff, size=5, color='navy', alpha=0.5, legend_label='Delta Mean ADC')
+
+    show(p2)
+
+    
+    # plt.figure(figsize=(12,9))
+    # plt.title(f'$\\Delta$ ADC RMS per febChannel, {gain_title} gain', fontsize=30)
+    # plt.xlabel('febChannel', fontsize=30, loc='right')
+    # plt.ylabel('$\\Delta$ ADC RMS', fontsize=30, loc='top')
+    # plt.xlim(0,127)
+    # plt.tick_params(labelsize=30, axis='both', which='major', direction='in', length=20)
+    # plt.tick_params(axis='both', which='minor', direction='in', length=14)
+    # ax = plt.gca()
+    # ax.xaxis.set_minor_locator(MultipleLocator(2))  # Adjust this to control minor ticks on x-axis
+    # ax.yaxis.set_minor_locator(AutoMinorLocator(5))  # Adjust this to control minor ticks on y-axis
+    # # Add major ticks on all sides
+    # ax.xaxis.set_ticks_position('both')
+    # ax.yaxis.set_ticks_position('both')
+    # plt.step(list(range(128)), rms_diff, label='$\\Delta$ ADC RMS')
+    # plt.step(list(range(128)), rms_err, label='$\\sigma_{ADC RMS}$', color='orange')
+    # plt.step(list(range(128)), -rms_err, color='orange')
+    # plt.legend(fontsize=20, loc='upper right')
+    # plt.text(x=0.01,y=0.95,s='$\\Delta ADC = NEVIS_{ADC} - EMF_{ADC}$', fontsize=17, transform=ax.transAxes)
+    # plt.tight_layout()
+    # plt.savefig(f'../plots/calib_rms_check_{gain}.png')
+    
+    # plt.figure(figsize=(12,9))
+    # plt.title(f'$\\Delta$ ADC Mean per febChannel, {gain_title} gain', fontsize=30)
+    # plt.xlabel('febChannel', fontsize=30, loc='right')
+    # plt.ylabel('$\\Delta$ Mean ADC', fontsize=30, loc='top')
+    # plt.xlim(0,127)
+    # plt.tick_params(labelsize=30, axis='both', which='major', direction='in', length=20)
+    # plt.tick_params(axis='both', which='minor', direction='in', length=14)
+    # ax = plt.gca()
+    # ax.xaxis.set_minor_locator(MultipleLocator(2))  # Adjust this to control minor ticks on x-axis
+    # ax.yaxis.set_minor_locator(AutoMinorLocator(5))  # Adjust this to control minor ticks on y-axis
+    # # Add major ticks on all sides
+    # ax.xaxis.set_ticks_position('both')
+    # ax.yaxis.set_ticks_position('both')
+    # plt.step(list(range(128)), mean_diff, label='$\\Delta$ Mean ADC')
+    # plt.step(list(range(128)), mean_err, label='$\\sigma_{Mean ADC}$', color='orange')
+    # plt.step(list(range(128)), -mean_err, color='orange')
+    # plt.legend(fontsize=20, loc='upper right')
+    # plt.text(x=0.01,y=0.95,s='$\\Delta ADC = NEVIS_{ADC} - EMF_{ADC}$', fontsize=17, transform=ax.transAxes)
+    # plt.tight_layout()
+    # plt.savefig(f'../plots/calib_mean_check_{gain}.png')
+    
+    
+def quantiles(file1,file2,gain):
+    data1 = get_root_data(file1)
+    data2 = get_root_data(file2)
+    
+    percent_sigma1 = []
+    percent_sigma2 = []
+    diff_med1 = []
+    diff_med2 = []
+    
+    for chan in range(128):
+        data_chan1 = data1[(data1['febChannel'] == chan) & (data1['gain'] == gain)]['ADC'].to_numpy()
+        med1 = np.median(data_chan1)
+        rms1 = np.std(data_chan1)
+        mean1 = np.mean(data_chan1)
+        
+        top = med1+rms1
+        bot = med1-rms1
+        data_bot1 = len(data_chan1[data_chan1 == int(bot)])*(1+int(bot)-bot)
+        data_top1 = len(data_chan1[data_chan1 == int(bot)])*(top-int(top))
+        
+        data_sigma1 = data_chan1[(data_chan1 > int(bot+1)) & (data_chan1 < int(top))]
+        
+        percent_sigma1.append(100 * (len(data_sigma1.flatten())+data_bot1+data_top1)/len(data_chan1.flatten()))
+        diff_med1.append(float(med1-mean1))
+        
+        data_chan2 = data2[(data2['febChannel'] == chan) & (data2['gain'] == gain)]['ADC'].to_numpy()
+        med2 = np.median(data_chan2)
+        rms2 = np.std(data_chan2)
+        mean2 = np.mean(data_chan2)
+        
+        top = med2+rms2
+        bot = med2-rms2
+        data_bot2 = len(data_chan2[data_chan2 == int(bot)])*(1+int(bot)-bot)
+        data_top2 = len(data_chan2[data_chan2 == int(bot)])*(top-int(top))
+        
+        data_sigma2 = data_chan2[(data_chan2 > int(bot+1)) & (data_chan2 < int(top))]
+        
+        percent_sigma2.append(100 * (len(data_sigma2.flatten())+data_bot2+data_top2)/len(data_chan2.flatten()))
+        diff_med2.append(float(med2-mean2))
+        
+    if gain == 0:
+        gain_title = 'Lo'
+        
+    else:
+        gain_title = 'Hi'
+    plt.figure(figsize=(12,9))
+    plt.title(f'Median - Mean', fontsize=30)
+    plt.xlabel('febChannel', fontsize=30, loc='right')
+    plt.ylabel('Median - Mean', fontsize=30, loc='top')
+    plt.xlim(0,127)
+    plt.tick_params(labelsize=30, axis='both', which='major', direction='in', length=20)
+    plt.tick_params(axis='both', which='minor', direction='in', length=14)
+    ax = plt.gca()
+    ax.xaxis.set_minor_locator(MultipleLocator(2))  # Adjust this to control minor ticks on x-axis
+    ax.yaxis.set_minor_locator(AutoMinorLocator(5))  # Adjust this to control minor ticks on y-axis
+    # Add major ticks on all sides
+    ax.xaxis.set_ticks_position('both')
+    ax.yaxis.set_ticks_position('both')
+    plt.scatter(list(range(128)), diff_med1, label=f'Median - Mean NEVIS, avg: {round(np.mean(diff_med1),3)}')
+    plt.scatter(list(range(128)), diff_med2, label=f'Median - Mean EMF, avg: {round(np.mean(diff_med2),3)}', color='orange')
+    plt.legend(fontsize=20, loc='upper right')
+    plt.tight_layout()
+    plt.savefig(f'../plots/median_mean_{gain}.png')
+    
+    plt.figure(figsize=(12,9))
+    plt.title(f'% Data within $\\pm \\sigma$', fontsize=30)
+    plt.xlabel('febChannel', fontsize=30, loc='right')
+    plt.ylabel('% Data', fontsize=30, loc='top')
+    plt.xlim(0,127)
+    plt.tick_params(labelsize=30, axis='both', which='major', direction='in', length=20)
+    plt.tick_params(axis='both', which='minor', direction='in', length=14)
+    ax = plt.gca()
+    ax.xaxis.set_minor_locator(MultipleLocator(2))  # Adjust this to control minor ticks on x-axis
+    ax.yaxis.set_minor_locator(AutoMinorLocator(5))  # Adjust this to control minor ticks on y-axis
+    # Add major ticks on all sides
+    ax.xaxis.set_ticks_position('both')
+    ax.yaxis.set_ticks_position('both')
+    plt.scatter(list(range(128)), percent_sigma1, label=f'% Data NEVIS, avg: {round(np.mean(percent_sigma1),1)}%')
+    plt.scatter(list(range(128)), percent_sigma2, label=f'% Data EMF, avg: {round(np.mean(percent_sigma2),1)}%', color='orange')
+    plt.legend(fontsize=20, loc='upper right')
+    plt.tight_layout()
+    plt.savefig(f'../plots/quantiles_{gain}.png')
+    
+    # output_file(f'../plots/median_mean_{gain}.html')
+    # chans = list(range(128))
+    # p1 = figure(title=f", {gain_title} gain",
+    #        x_axis_label=r"febChannel",
+    #        y_axis_label=r"Percent data",
+    #        width=800, 
+    #        height=700)
+
+    # p1.step(chans,percent_sigma1,  legend_label=f'Percent data within +/- sigma NEVIS, Average: {round(np.mean(percent_sigma1),1)}%', line_color='red')
+    # #p1.step(chans,percent_sigma2,  legend_label=f'Percent data within +/- sigma EMF, Average: {round(np.mean(percent_sigma2),1)}%', line_color='blue')
+    
+    # # Step 4: Add scatter points
+    # show(p1)
+    
+def odd_even(file1,file2,gain):
+    data1 = get_root_data(file1)
+    data2 = get_root_data(file2)
+    
+    even_odd1 = []
+    even_odd2 = []
+    for chan in range(128):
+        data_chan1 = data1[(data1['febChannel'] == chan) & (data1['gain'] == gain)]['ADC'].to_numpy()
+        
+        data_even1 = data_chan1[data_chan1 % 2 == 0]
+        
+        even_odd1.append(100*len(data_even1.flatten())/len(data_chan1.flatten()))
+        
+        data_chan2 = data2[(data2['febChannel'] == chan) & (data2['gain'] == gain)]['ADC'].to_numpy()
+
+        data_even2 = data_chan2[data_chan2 % 2 == 0]
+        
+        even_odd2.append(100*len(data_even2.flatten())/len(data_chan2.flatten()))
+        
+    if gain == 0:
+        gain_title = 'Lo'
+        
+    else:
+        gain_title = 'Hi'
+    
+    output_file(f'../plots/odd_even_{gain}.html')
+    chans = list(range(128))
+    p1 = figure(title=f"Percent Even ADC, {gain_title} gain",
+           x_axis_label=r"febChannel",
+           y_axis_label=r"100*len(ADC_even)/len(ADC)",
+           width=800, 
+           height=700)
+
+    p1.step(chans,even_odd1,  legend_label=f'% Even ADC NEVIS, Average: {round(np.mean(even_odd1),1)}', line_color='red')
+    p1.step(chans,even_odd2,  legend_label=f'% Even ADC EMF, Average: {round(np.mean(even_odd2),1)}', line_color='blue')
+    
+    # Step 4: Add scatter points
+    show(p1)
