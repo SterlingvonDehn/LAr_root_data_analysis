@@ -45,7 +45,7 @@ def ADC_vs_chan(file, stdev=True):
             rms.append(np.std(ADC))
             
         #plt.figure(figsize=(13,13))
-        fig, ax1 = plt.subplots(figsize=(13,13))   
+        fig, ax1 = plt.subplots(figsize=(15,12))   
         plt.tick_params(labelsize=30, axis='both', which='major', direction='in', length=20)
         plt.tick_params(axis='both', which='minor', direction='in', length=14)
         ax = plt.gca()
@@ -297,17 +297,17 @@ def MDAC_const(file, gain, json_file=False):
         
     return ws_dict
 
-if __name__ == "__main__":
-    file_name = args[1]
-    if not os.path.exists(f'plots_{file_name.split('/')[-1]}'):
-        os.mkdir(f'plots_{file_name.split('/')[-1]}')
+# if __name__ == "__main__":
+#     file_name = args[1]
+#     if not os.path.exists(f'plots_{file_name.split('/')[-1]}'):
+#         os.mkdir(f'plots_{file_name.split('/')[-1]}')
         
-    ADC_meas_2dhist(file_name)
-    meas_mean_hist(file_name)
-    if not os.path.exists(f'plots_{file_name.split('/')[-1]}/ADC_vs_chan'):
-        os.mkdir(f'plots_{file_name.split('/')[-1]}/ADC_vs_chan')
-    ADC_vs_chan(file_name)
-    if not os.path.exists(f'plots_{file_name.split('/')[-1]}/ADC_vs_measurement'):
-        os.mkdir(f'plots_{file_name.split('/')[-1]}/ADC_vs_measurement')
-    ADC_vs_measure(file_name)
+#     ADC_meas_2dhist(file_name)
+#     meas_mean_hist(file_name)
+#     if not os.path.exists(f'plots_{file_name.split('/')[-1]}/ADC_vs_chan'):
+#         os.mkdir(f'plots_{file_name.split('/')[-1]}/ADC_vs_chan')
+#     ADC_vs_chan(file_name)
+#     if not os.path.exists(f'plots_{file_name.split('/')[-1]}/ADC_vs_measurement'):
+#         os.mkdir(f'plots_{file_name.split('/')[-1]}/ADC_vs_measurement')
+#     ADC_vs_measure(file_name)
     
