@@ -10,19 +10,16 @@ from matplotlib.ticker import MultipleLocator
 from matplotlib.ticker import AutoMinorLocator
 from bokeh.plotting import figure, show
 from bokeh.io import output_file
-
-file_1 = "../data/output-data-fullfeb2v2-20240910.root:Data" #First data set -- data taken in 4 "chuncks"
-
-file_2 = "../data/output-data-MXSX-hct20l-2024-09-18.root:Data" #Second data set -- Full feb data taken, issue with iEvent
-
-file_3 = "../data/output-data-MXSX-hct20l-2024-09-23.root:Data" #Third data set -- Same as second but iEvent error corrected
-
-file_4 = "../data/output-data-hct22l-MDACCalib20241010.root:Data" #Fourth data set -- EMF caibration instead of NEVIS
+import sys
+import os
+args = sys.argv
 
 def get_root_data(file):
     '''
     Extracts data from root file into a pandas data frame
     '''
+    if file.split(':')[-1] != 'Data':
+        file = f'{file}:Data' 
     
     with uproot.open(file) as f:
         print(f.keys())
@@ -84,7 +81,7 @@ def EMF_system_test(file):
     plt.step(febs, ADC_mean_l, label='Lo gain', linewidth=2)
     plt.legend(fontsize=25)
     plt.tight_layout()
-    plt.savefig('../plots/mean_system_test.png')
+    plt.savefig(f'plots_{file.split('/')[-1]}/mean_system_test.png')
 
     #plotting stdev vs feb
     plt.figure(figsize=(12,8))
@@ -105,36 +102,36 @@ def EMF_system_test(file):
     plt.step(febs, ADC_std_l, label='Lo gain', linewidth=2)
     plt.legend(fontsize=25)
     plt.tight_layout()
-    plt.savefig('../plots/std_system_test.png')
+    plt.savefig(f'plots_{file.split('/')[-1]}/std_system_test.png')
     plt.clf()
     
-    #plotting num entries vs feb
-    plt.figure(figsize=(12,8))
-    plt.title('ATLAS Internal/EMF System Test')
-    plt.xlabel('FebChannel')
-    plt.ylabel('# of entries')
-    plt.xlim(0,127)
-    plt.step(febs,num_ent_h, color='pink', linewidth=2, label=f'High Gain, total: {len(data_high)}')
-    plt.step(febs,num_ent_l, color='blue', linewidth=2, label=f'Low Gain, total: {len(data_low)}')
-    plt.legend()
-    plt.tight_layout()
-    plt.savefig('../plots/num_entries_system_test.png')
-    plt.clf()
+    #plotting num entries vs feb 
+    #USED TO CHECK FIRST DATA SETS
+    # plt.figure(figsize=(12,8))
+    # plt.title('ATLAS Internal/EMF System Test')
+    # plt.xlabel('FebChannel')
+    # plt.ylabel('# of entries')
+    # plt.xlim(0,127)
+    # plt.step(febs,num_ent_h, color='pink', linewidth=2, label=f'High Gain, total: {len(data_high)}')
+    # plt.step(febs,num_ent_l, color='blue', linewidth=2, label=f'Low Gain, total: {len(data_low)}')
+    # plt.legend()
+    # plt.tight_layout()
+    # plt.savefig('../plots/num_entries_system_test.png')
+    # plt.clf()
     
-def correlation(file, gain, auto_range=True):
+def correlation(file, gain, auto_range):
     '''
     Produces a Pearson Correlation matrix plot for febChannels in the data set.
-    ONLY TAKES FIRST TIME ENTRY FOR EACH EVENT --> needs to be adjusted to take all data
     file == root file path
     gain == 0 or 1 -> 0 (lo) 1 (hi)
-    auto_range == True or False -> removes 1s from diagonal adding contrast for all other values 
+    auto_range == float -> if 0 will automatically generate range
     '''
     data = get_root_data(file) #extracting data
     matrix = np.zeros((128,128)) #creating empty matrix
     
     #calculating correlation coefficient for all channel combinations
     for i in range(128):
-        for j in range(i + 1):
+        for j in range(i):
             data_chan_i = data[(data['febChannel']==i) & (data['gain']==gain)]
             data_chan_j = data[(data['febChannel']==j) & (data['gain']==gain)]
             #Used if only one time entrie is desired
@@ -158,21 +155,16 @@ def correlation(file, gain, auto_range=True):
             corr_coefficient = pearsonr(A,B)[0]
             
             #populating matrix depending on auto_range settings
-            if auto_range:
-                if i != j:
-                    matrix[i][j] = corr_coefficient
-                    matrix[j][i] = corr_coefficient
-            else:
-                matrix[i][j] = corr_coefficient
-                matrix[j][i] = corr_coefficient
-
+            matrix[i][j] = corr_coefficient
+            matrix[j][i] = corr_coefficient
+    
         print(f'{round((i/127)*100, 1)}%') #progress tracker
     
     #defining color range if auto_range == True
-    if auto_range:
+    if auto_range == 0:
         max_v = max([abs(np.max(matrix)), abs(np.min(matrix))])
     else:
-        max_v = 1
+        max_v = auto_range
     
     if gain == 0:
         gain_title = 'Lo'
@@ -202,12 +194,17 @@ def correlation(file, gain, auto_range=True):
     cbar.set_label('Correlation Coeff', fontsize=30)
     plt.tick_params(labelsize=25)
     plt.tight_layout()
-    plt.savefig(f'../plots/{auto_range}_{file.split('/')[-1]}_channel_gain{gain}_correlation_fullavg.png')
+    plt.savefig(f'plots_{file.split('/')[-1]}/pears_correlation_gain{gain}.png', bbox_inches='tight')
 
     return matrix    
     
-def correlation_diff_event(file, gain, event=False, plot=True):
+def correlation_diff_event(file, gain, auto_range, event, plot=True):
     '''
+    Plots a correlation matrix for unrelated events
+    file == root file path
+    gain == 0 or 1 -> 0 (lo) 1 (hi)
+    auto_range == float -> if 0 will automatically generate range
+    event == "even_odd" (comapares even entries to odd), integer (compares event i with event i+integer), or "half" compares event i with event i+1/2max_event
     '''
     data = get_root_data(file) #extracting data
     matrix = np.zeros((128,128)) #creating empty matrix
@@ -219,22 +216,30 @@ def correlation_diff_event(file, gain, event=False, plot=True):
     half = (max_event - min_event - 1)/2
     mid = min_event + half
  
-    if not event:
-        event = half
+    if event == 'half':
+        event_nums = half
         
     corr_hist = []
     for i in range(128):
         for j in range(i + 1):
-            # data_chan_i = data[(data['febChannel']==i) & (data['gain']==gain)].iloc[1::2]
-            # data_chan_j = data[(data['febChannel']==j) & (data['gain']==gain)].iloc[::2]
+            #compares even events to odd events
+            if event == "even_odd":
+                data_chan_i = data[(data['febChannel']==i) & (data['gain']==gain)].iloc[1::2]
+                data_chan_j = data[(data['febChannel']==j) & (data['gain']==gain)].iloc[::2]
             
-            data_chan_i = data[(data['febChannel']==i) & (data['gain']==gain)].iloc[:-4:1]
-            data_chan_j = data[(data['febChannel']==j) & (data['gain']==gain)].iloc[4::1]
+            #compares event i to event i+event
+            elif type(event) == int:
+                data_chan_i = data[(data['febChannel']==i) & (data['gain']==gain)].iloc[:-event:1]
+                data_chan_j = data[(data['febChannel']==j) & (data['gain']==gain)].iloc[event::1]
 
-            # data_chan_i = data[(data['febChannel']==i) & (min_event <= data['iEvent']) & (data['iEvent'] < min_event + event)]
-            # data_chan_j = data[(data['febChannel']==j) & (mid < data['iEvent']) & (data['iEvent'] <= mid + event)]
+            #compares event i to event i+1/2max_event
+            elif event == 'half':
+                data_chan_i = data[(data['febChannel']==i) & (min_event <= data['iEvent']) & (data['iEvent'] < min_event + event_nums)]
+                data_chan_j = data[(data['febChannel']==j) & (mid < data['iEvent']) & (data['iEvent'] <= mid + event_nums)]
             
-            #Used if only one time entrie is desired
+            else:
+                print(r'Invalid event, must be one of: "even_odd", an integer, or "half"')
+                return
 
             #creating arrays of data
             A = np.array(data_chan_i['ADC'].to_numpy().flatten(), dtype=np.float64)
@@ -254,7 +259,10 @@ def correlation_diff_event(file, gain, event=False, plot=True):
     
     N = len(A)
     #defining color range if auto_range == True
-    max_v = max([abs(np.max(matrix)), abs(np.min(matrix))])
+    if auto_range == 0:
+        max_v = max([abs(np.max(matrix)), abs(np.min(matrix))])
+    else:
+        max_v = auto_range
     
     if gain == 0:
         gain_title = 'Lo'
@@ -285,7 +293,7 @@ def correlation_diff_event(file, gain, event=False, plot=True):
         cbar.set_label('Correlation Coeff', fontsize=30)
         plt.tick_params(labelsize=25)
         plt.tight_layout()
-        plt.savefig(f'../plots/{file.split('/')[-1]}_channel_gain{gain}_correlation_unrelate.png')
+        plt.savefig(f'plots_{file.split('/')[-1]}/unrelated_correlation_gain{gain}_event_{event}.png', bbox_inches='tight')
         
         
         plt.figure(figsize=(12,9))
@@ -301,10 +309,10 @@ def correlation_diff_event(file, gain, event=False, plot=True):
         # Add major ticks on all sides
         ax.xaxis.set_ticks_position('both')
         ax.yaxis.set_ticks_position('both')
-        plt.hist(corr_hist, bins=70, edgecolor='black',label=f'N = {N}, $\sigma$ = {round(np.std(corr_hist),3)}, Mean = {round(np.mean(corr_hist),3)}')
+        plt.hist(corr_hist, bins=70, edgecolor='black',label=f'N = {N}, $\\sigma$ = {round(np.std(corr_hist),3)}, Mean = {round(np.mean(corr_hist),3)}')
         plt.legend(fontsize=25)
         plt.tight_layout()
-        plt.savefig(f'../plots/{N}_corr_coeff_hist_unrelate_{gain}.png')
+        plt.savefig(f'plots_{file.split('/')[-1]}/unrelated_correlation_histo_gain{gain}_event_{event}.png', bbox_inches='tight')
     
     return [N, np.std(corr_hist)]
 
@@ -345,7 +353,7 @@ def corr_vs_n(file, events, gain):
     
     return(ns,stds)
 
-def ADC_event(file, chan, gain, event_range=False):
+def ADC_event(file, gain, event_range=False):
     '''
     Plots a 2d histogram of ADC vs events for specified channel and gain
     chan = channel #
@@ -353,71 +361,73 @@ def ADC_event(file, chan, gain, event_range=False):
     event_range = (start_entry,end_entry), automatic if not specified
     '''
     data = get_root_data(file) #extracts data
-    data_feb = data[(data['febChannel']==chan) & (data['gain']==gain)] #selects channel and gain
-    data_adc = data_feb['ADC'].to_numpy()
     
-    #selecting range
-    if not event_range:
-        start = 0
-        end = np.max(data_feb['iEvent'])
-    else:
-        start = event_range[0]
-        end = event_range[1] 
-    
-    #calculating adc values per event
-    events = []
-    adc = []
-    for i in range(start,end):
-        for j in range(len(data_adc[i])):
-            events.append(i)
-            adc.append(data_adc[i][j])
-    
-    #calculating #bins
-    adc_bins = int(np.max(adc) - np.min(adc))
-    if gain == 0:
-        gain_title = 'Lo'
-    else:
-        gain_title = 'Hi'
-    
-    #plotting hist
-    plt.figure(figsize=(15,12))
-    plt.tick_params(labelsize=30,axis='both', which='major', direction='in', length=20)
-    # Set minor ticks
-    plt.tick_params(axis='both', which='minor', direction='in', length=15)
-    # Create minor ticks
-    ax = plt.gca()
-    ax.xaxis.set_minor_locator(AutoMinorLocator(5))  # Adjust this to control minor ticks on x-axis
-    ax.yaxis.set_minor_locator(AutoMinorLocator(5))  # Adjust this to control minor ticks on y-axis
-    # Add major ticks on all sides
-    ax.xaxis.set_ticks_position('both')
-    ax.yaxis.set_ticks_position('both')
-    plt.title(f'ADC:iEvent, {gain_title} gain & febChannel {chan}', fontsize=30)
-    plt.xlabel('iEvent', fontsize=30, loc='right')
-    plt.ylabel('ADC', fontsize=30, loc='top')
-    hist = plt.hist2d(events,adc,bins=[30,adc_bins], cmin=1)
-    cbar = plt.colorbar()
-    cbar.ax.tick_params(labelsize=20)  # Set the fontsize for the colorbar ticks
-    cbar.set_label('# Entries', fontsize=30)
-    
-    #calcualting avg and stdev per bin
-    avg_adc = []
-    bin_lst = []
-    std_up_adc = []
-    std_down_adc = []
-    for i in range(len(hist[1]) - 1):
-        data_bin = data_feb[(data_feb['iEvent'] <= hist[1][i+1]) & (data_feb['iEvent'] > hist[1][i])]
-        avg_adc.append(np.mean(data_bin['ADC']))
-        std_up_adc.append(avg_adc[-1] + np.std(data_bin['ADC']))
-        std_down_adc.append(avg_adc[-1] - np.std(data_bin['ADC']))
-        bin_lst.append(hist[1][i+1])
+    for chan in range(128):
+        data_feb = data[(data['febChannel']==chan) & (data['gain']==gain)] #selects channel and gain
+        data_adc = data_feb['ADC'].to_numpy()
 
-    #plotting avg and stdev
-    plt.step(bin_lst,avg_adc,color='red', label='Mean/bin')
-    plt.step(bin_lst,std_up_adc,color='red', linestyle='--', label='Stdev/bin')
-    plt.step(bin_lst,std_down_adc,color='red', linestyle='--')
-    plt.legend(fontsize=20)
-    plt.tight_layout()
-    plt.savefig(f'../plots/ADC_iEvent_{chan}_{gain}.png')
+        #selecting range
+        if not event_range:
+            start_event = np.min(data_feb['iEvent'])
+            end = np.max(data_feb['iEvent']) - start_event
+            start = 0
+        else:
+            start = event_range[0]
+            end = event_range[1] 
+        
+        events = []
+        adc = []
+        for i in range(start,end):
+            for j in range(len(data_adc[i])):
+                events.append(i)
+                adc.append(data_adc[i][j])
+        
+        #calculating #bins
+        adc_bins = int(np.max(adc) - np.min(adc))
+        if gain == 0:
+            gain_title = 'Lo'
+        else:
+            gain_title = 'Hi'
+        
+        #plotting hist
+        plt.figure(figsize=(15,12))
+        plt.tick_params(labelsize=30,axis='both', which='major', direction='in', length=20)
+        # Set minor ticks
+        plt.tick_params(axis='both', which='minor', direction='in', length=15)
+        # Create minor ticks
+        ax = plt.gca()
+        ax.xaxis.set_minor_locator(AutoMinorLocator(5))  # Adjust this to control minor ticks on x-axis
+        ax.yaxis.set_minor_locator(AutoMinorLocator(5))  # Adjust this to control minor ticks on y-axis
+        # Add major ticks on all sides
+        ax.xaxis.set_ticks_position('both')
+        ax.yaxis.set_ticks_position('both')
+        plt.title(f'ADC:iEvent, {gain_title} gain & febChannel {chan}', fontsize=30)
+        plt.xlabel('iEvent', fontsize=30, loc='right')
+        plt.ylabel('ADC', fontsize=30, loc='top')
+        hist = plt.hist2d(events,adc,bins=[30,adc_bins], cmin=1)
+        cbar = plt.colorbar()
+        cbar.ax.tick_params(labelsize=20)  # Set the fontsize for the colorbar ticks
+        cbar.set_label('# Entries', fontsize=30)
+        
+        #calcualting avg and stdev per bin
+        avg_adc = []
+        bin_lst = []
+        std_up_adc = []
+        std_down_adc = []
+        for i in range(len(hist[1]) - 1):
+            data_bin = data_feb[(data_feb['iEvent'] <= hist[1][i+1]) & (data_feb['iEvent'] > hist[1][i])]
+            avg_adc.append(np.mean(data_bin['ADC']))
+            std_up_adc.append(avg_adc[-1] + np.std(data_bin['ADC']))
+            std_down_adc.append(avg_adc[-1] - np.std(data_bin['ADC']))
+            bin_lst.append(hist[1][i+1])
+
+        #plotting avg and stdev
+        plt.step(bin_lst,avg_adc,color='red', label='Mean/bin')
+        plt.step(bin_lst,std_up_adc,color='red', linestyle='--', label='Stdev/bin')
+        plt.step(bin_lst,std_down_adc,color='red', linestyle='--')
+        plt.legend(fontsize=20)
+        plt.tight_layout()
+        plt.savefig(f'plots_{file.split('/')[-1]}/ADC_iEvent_2d/channel_{chan}_gain{gain}.png', bbox_inches='tight')
 
 def auto_correlation(file, gain, chan, auto_range=True):
     '''
@@ -607,7 +617,7 @@ def coherent_noise(file, gain):
     
     bin_width = x[1] - x[0]
     p *= (y.sum() * bin_width) 
-    plt.plot(lnspc, p, color='red', linewidth=2, label=f'Gauss fit, $\mu$ = {round(mu,2)}, $\sigma$ = {round(std,1)}')
+    plt.plot(lnspc, p, color='red', linewidth=2, label=f'Gauss fit, $\\mu$ = {round(mu,2)}, $\\sigma$ = {round(std,1)}')
     plt.tick_params(labelsize=30, axis='both', which='major', direction='in', length=20)
     plt.tick_params(axis='both', which='minor', direction='in', length=14)
     ax = plt.gca()
@@ -616,14 +626,14 @@ def coherent_noise(file, gain):
     # Add major ticks on all sides
     ax.xaxis.set_ticks_position('both')
     ax.yaxis.set_ticks_position('both')
-    plt.text(0.05, 0.95,f'Entries = {round(len(dataSum)/1000,1)}k\nN ch = {N_channels}\nMean = {round(mu,1)}\nRMS = {round(tot_noise,1)}\n$\sigma$ inco = {round(ch_noise,1)}\nCohe noise/ch = {round(coh_noise,4)}\nAvg noise NEVIS/ch = {round(avg_noise_nev,4)}\nAvg noise Milano/ch = {round(avg_noise_it,4)}\n[%]Cohe noise NEVIS = {round(pct_coh_nev,4)}\n[%]Cohe noise Milano = {round(pct_coh_it,4)}', transform=plt.gca().transAxes,fontsize=20, verticalalignment='top', horizontalalignment='left')
+    plt.text(0.05, 0.95,f'Entries = {round(len(dataSum)/1000,1)}k\nN ch = {N_channels}\nMean = {round(mu,1)}\nRMS = {round(tot_noise,1)}\n$\\sigma$ inco = {round(ch_noise,1)}\nCohe noise/ch = {round(coh_noise,4)}\nAvg noise/ch = {round(avg_noise_nev,4)}\n[%]Cohe noise = {round(pct_coh_nev,4)}', transform=plt.gca().transAxes,fontsize=20, verticalalignment='top', horizontalalignment='left')
     plt.legend(fontsize=20)
     plt.title(f'EMF system test, coherent, {gain_title} gain', fontsize=30)
     
     plt.xlabel('ADC counts', fontsize=30, loc='right')
     plt.ylabel('Entries', fontsize=30, loc='top')
     plt.tight_layout()
-    plt.savefig(f'../plots/coherence_hist_{gain}.png')
+    plt.savefig(f'plots_{file.split('/')[-1]}/coherence_hist_{gain}.png', bbox_inches='tight')
     
 def coh_corr(file,gain):
     data = get_root_data(file) #extracting data
@@ -778,41 +788,109 @@ def FFT_avg(file,gain,sample):
     plt.tight_layout()
     plt.savefig(f'../plots/fft_avg_{gain}_{sample}.png')
     
-def FFT(file,chan,gain,sample):
+def FFT(file,gain,sample):
     data = get_root_data(file)
     
-    data_chan = data[(data['febChannel']==chan) & (data['gain']==gain)]
+    for chan in range(128):
+        data_chan = data[(data['febChannel']==chan) & (data['gain']==gain)]
 
-    signal = []
-    for entry in data_chan['ADC']:
-        signal.append(entry[sample])
-    
-    adc_values = []
-    # for i in signal:
-    #     adc_values.append(i - np.mean(signal))
-    adc_values = signal
-     
+        signal = []
+        for entry in data_chan['ADC']:
+            signal.append(entry[sample])
+        
+        adc_values = signal
+        
+        fs = 200  # Sampling frequency in Hz
+        N = len(adc_values)  # Number of samples
+
+        # Step 2: Create a time vector
+        t = np.arange(N) / fs  # Time vector based on the number of samples
+
+        # Step 3: Compute FFT
+        fft_result = np.fft.fft(adc_values)
+        # Get the frequency bins
+        frequencies = np.fft.fftfreq(N, 1/fs)
+        ln_freq = np.log(frequencies[:N//2])
+
+        if gain == 0:
+            gain_title = 'Lo'
+        else:
+            gain_title = 'Hi'    
+        # Step 4: Plotting the original signal
+        plt.figure(figsize=(15, 10))
+
+        # Plot original signal
+        plt.subplot(2, 1, 1)
+        plt.tick_params(labelsize=30, axis='both', which='major', direction='in', length=20)
+        plt.tick_params(axis='both', which='minor', direction='in', length=14)
+        ax = plt.gca()
+        ax.xaxis.set_minor_locator(MultipleLocator(2))  # Adjust this to control minor ticks on x-axis
+        ax.yaxis.set_minor_locator(AutoMinorLocator(5))  # Adjust this to control minor ticks on y-axis
+        # Add major ticks on all sides
+        ax.xaxis.set_ticks_position('both')
+        ax.yaxis.set_ticks_position('both')
+        plt.plot(t, adc_values)
+        plt.title(f'ADC Signal for channel {chan}, {gain_title} gain, time sample {sample}',fontsize=25)
+        plt.xlabel('Time [s]',fontsize=25)
+        plt.ylabel('ADC Value',fontsize=25)
+        plt.xlim(0,t[-1])
+        plt.grid()
+
+        # Step 5: Plot FFT results
+        plt.subplot(2, 1, 2)
+        plt.tick_params(labelsize=30, axis='both', which='major', direction='in', length=20)
+        plt.tick_params(axis='both', which='minor', direction='in', length=14)
+        ax = plt.gca()
+        ax.xaxis.set_minor_locator(MultipleLocator(2))  # Adjust this to control minor ticks on x-axis
+        ax.yaxis.set_minor_locator(AutoMinorLocator(5))  # Adjust this to control minor ticks on y-axis
+        # Add major ticks on all sides
+        ax.xaxis.set_ticks_position('both')
+        ax.yaxis.set_ticks_position('both')
+        plt.plot(frequencies[1:N//2], np.abs(fft_result)[1:N//2])
+        #plt.plot(frequencies[:N//2], np.abs(fft_result)[:50])  # Plot only positive frequencies
+        plt.title('FFT of ADC Signal',fontsize=25)
+        
+        plt.xlabel('Frequency [Hz]',fontsize=25)
+        #plt.xlabel('Frequency [Hz]')
+        plt.ylabel('Magnitude',fontsize=25)
+        plt.xlim(0, 100)  # Limit x-axis to half the sampling frequency
+        plt.grid()
+
+        plt.tight_layout()
+        plt.savefig(f'plots_{file.split('/')[-1]}/FFTs/channel_{chan}_gain{gain}_sample{sample}.png')
+
+def FFT_hist(file,gain,sample, bin_num):
+    data = get_root_data(file)
+    matrix = np.zeros((bin_num,128))
     fs = 200  # Sampling frequency in Hz
-    N = len(adc_values)  # Number of samples
+    
+    ffts = []
+    freqs = []
+    for chan in range(128):
+        data_chan = data[(data['febChannel']==chan) & (data['gain']==gain)]
 
-    # Step 2: Create a time vector
-    t = np.arange(N) / fs  # Time vector based on the number of samples
-
-    # Step 3: Compute FFT
-    fft_result = np.fft.fft(adc_values)
-    # Get the frequency bins
-    frequencies = np.fft.fftfreq(N, 1/fs)
-    ln_freq = np.log(frequencies[:N//2])
-
+        adc_values= []
+        for entry in data_chan['ADC']:
+            adc_values.append(entry[sample])
+        N = len(adc_values)  # Number of samples
+        # Step 2: Create a time vector
+        t = np.arange(N) / fs  # Time vector based on the number of samples
+        # Step 3: Compute FFT
+        fft_result =  np.abs(np.fft.fft(adc_values))[1:N//2]
+        # Get the frequency bins
+        frequencies = np.fft.fftfreq(N, 1/fs)[1:N//2]
+        num_elements = int(len(frequencies)/bin_num)
+        j = 0
+        for i in range(bin_num):
+            bin_avg = np.max(fft_result[j:j+num_elements])
+            matrix[i][chan] = bin_avg
+            j += num_elements
+    matrix[matrix == 0] = np.nan
     if gain == 0:
         gain_title = 'Lo'
     else:
-        gain_title = 'Hi'    
-    # Step 4: Plotting the original signal
-    plt.figure(figsize=(15, 10))
-
-    # Plot original signal
-    plt.subplot(2, 1, 1)
+        gain_title = 'Hi' 
+    plt.figure(figsize=(15,12))
     plt.tick_params(labelsize=30, axis='both', which='major', direction='in', length=20)
     plt.tick_params(axis='both', which='minor', direction='in', length=14)
     ax = plt.gca()
@@ -821,35 +899,24 @@ def FFT(file,chan,gain,sample):
     # Add major ticks on all sides
     ax.xaxis.set_ticks_position('both')
     ax.yaxis.set_ticks_position('both')
-    plt.plot(t, adc_values)
-    plt.title(f'ADC Signal for channel {chan}, {gain_title} gain, time sample {sample}',fontsize=25)
-    plt.xlabel('Time [s]',fontsize=25)
-    plt.ylabel('ADC Value',fontsize=25)
-    plt.xlim(0,t[-1])
-    plt.grid()
+    plt.title(f'Max FFT Magnitude for febChannels, {gain_title} gain', fontsize=30)
+    plt.xlabel('febChanel', fontsize=30,loc='right')
+    plt.ylabel('Frequency [Hz]', fontsize=30,loc='top')
+    plt.ylim(0,bin_num)
+    plt.imshow(matrix, extent=[0, matrix.shape[1], matrix.shape[0],0],aspect=4)
+    cbar = plt.colorbar(shrink=0.6)
+    cbar.ax.tick_params(labelsize=20)  # Set the fontsize for the colorbar ticks
+    cbar.set_label('Max FFT Magnitude', fontsize=30)
 
-    # Step 5: Plot FFT results
-    plt.subplot(2, 1, 2)
-    plt.tick_params(labelsize=30, axis='both', which='major', direction='in', length=20)
-    plt.tick_params(axis='both', which='minor', direction='in', length=14)
-    ax = plt.gca()
-    ax.xaxis.set_minor_locator(MultipleLocator(2))  # Adjust this to control minor ticks on x-axis
-    ax.yaxis.set_minor_locator(AutoMinorLocator(5))  # Adjust this to control minor ticks on y-axis
-    # Add major ticks on all sides
-    ax.xaxis.set_ticks_position('both')
-    ax.yaxis.set_ticks_position('both')
-    plt.plot(frequencies[1:N//2], np.abs(fft_result)[1:N//2])
-    #plt.plot(frequencies[:N//2], np.abs(fft_result)[:50])  # Plot only positive frequencies
-    plt.title('FFT of ADC Signal',fontsize=25)
-    
-    plt.xlabel('Frequency [Hz]',fontsize=25)
-    #plt.xlabel('Frequency [Hz]')
-    plt.ylabel('Magnitude',fontsize=25)
-    plt.xlim(0, 100)  # Limit x-axis to half the sampling frequency
-    plt.grid()
-
+    old_tick = []
+    new_tick = []
+    for i in range(6):
+        old_tick.append(i*(bin_num/5))
+        new_tick.append(int(i*20))
+    plt.yticks(ticks=old_tick, labels=new_tick)
     plt.tight_layout()
-    plt.savefig(f'../plots/fft_{chan}_{gain}_{sample}.png')
+    plt.savefig(f'plots_{file.split('/')[-1]}/FFT_hist_{gain}.png', bbox_inches='tight')
+    return matrix
     
 def chi_2(file, file2, gain, channel=False):
     data_1 = get_root_data(file)
@@ -1229,3 +1296,25 @@ def odd_even(file1,file2,gain):
     
     # Step 4: Add scatter points
     show(p1)
+
+
+if __name__ == "__main__":
+    file_name = args[1]
+    if not os.path.exists(f'plots_{file_name.split('/')[-1]}'):
+        os.mkdir(f'plots_{file_name.split('/')[-1]}')
+    EMF_system_test(file_name)
+    for gain in range(2):
+        correlation(file_name,gain,0)
+        correlation_diff_event(file_name,gain,0, 'even_odd')
+        correlation_diff_event(file_name,gain,0, 'half')
+        coherent_noise(file_name,gain)
+        FFT_hist(file_name,gain,0,20)
+
+        if not os.path.exists(f'plots_{file_name.split('/')[-1]}/ADC_iEvent_2d'):
+            os.mkdir(f'plots_{file_name.split('/')[-1]}/ADC_iEvent_2d')
+        if not os.path.exists(f'plots_{file_name.split('/')[-1]}/FFTs'):
+            os.mkdir(f'plots_{file_name.split('/')[-1]}/FFTs')
+        ADC_event(file_name, gain)
+        FFT(file_name,gain,0)
+    
+        
