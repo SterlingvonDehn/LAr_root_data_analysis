@@ -12,6 +12,7 @@ from bokeh.plotting import figure, show
 from bokeh.io import output_file
 import sys
 import os
+
 args = sys.argv
 
 def get_root_data(file):
@@ -62,6 +63,8 @@ def EMF_system_test(file):
     
     febs = list(range(128)) #feb list
     
+    if not os.path.exists(f'plots_{file.split('/')[-1]}'):
+         os.mkdir(f'plots_{file.split('/')[-1]}')
     #plotting mean vs feb
     plt.figure(figsize=(12,8))
     plt.title('ATLAS Internal/EMF System Test', fontsize=30)
@@ -82,6 +85,7 @@ def EMF_system_test(file):
     plt.legend(fontsize=25)
     plt.tight_layout()
     plt.savefig(f'plots_{file.split('/')[-1]}/mean_system_test.png')
+    plt.clf()
 
     #plotting stdev vs feb
     plt.figure(figsize=(12,8))
@@ -135,23 +139,16 @@ def correlation(file, gain, auto_range):
             data_chan_i = data[(data['febChannel']==i) & (data['gain']==gain)]
             data_chan_j = data[(data['febChannel']==j) & (data['gain']==gain)]
             #Used if only one time entrie is desired
-            
-            '''
-            #taking first time entry for each event
-            for n in data_chan_i:
-                A.append(n[0])
-            for m in data_chan_j:
-                B.append(m[0])
-            
-            '''
+
+
             #creating arrays of data
             A = np.array(data_chan_i['ADC'].to_numpy().flatten(), dtype=np.float64)
             B = np.array(data_chan_j['ADC'].to_numpy().flatten(), dtype=np.float64)
 
-            if len(A) != len(B) or not np.array_equal(data_chan_i['iEvent'].to_numpy(),data_chan_j['iEvent'].to_numpy()): #skipping if arrays are different lenghts 
+            if len(A) != len(B) or not np.array_equal(data_chan_i['iEvent'].to_numpy(),data_chan_j['iEvent'].to_numpy()): #skipping if lenght A != lenght B or if iEvent order is not the same
                 continue
             
-            #corr_coefficient = (np.mean(A*B) - np.mean(A)*np.mean(B))/(np.std(A)*np.std(B)) #calculating Pearson correlation coefficient
+            #calculating Pearson correlation coefficient
             corr_coefficient = pearsonr(A,B)[0]
             
             #populating matrix depending on auto_range settings
@@ -171,6 +168,9 @@ def correlation(file, gain, auto_range):
     else:
         gain_title = 'Hi'
     
+    
+    if not os.path.exists(f'plots_{file.split('/')[-1]}'):
+        os.mkdir(f'plots_{file.split('/')[-1]}')
     #plotting
     plt.figure(figsize=(15,15))
     plt.title(f'febChannel Correlation, {gain_title} gain', fontsize=30)
@@ -204,7 +204,7 @@ def correlation_diff_event(file, gain, auto_range, event, plot=True):
     file == root file path
     gain == 0 or 1 -> 0 (lo) 1 (hi)
     auto_range == float -> if 0 will automatically generate range
-    event == "even_odd" (comapares even entries to odd), integer (compares event i with event i+integer), or "half" compares event i with event i+1/2max_event
+    event == "even_odd" (comapares even entries to odd), integer (compares event i with event i+integer), "half" compares event i with event i+1/2max_event, or "n_event" used to calculate RMS for different number of entries
     '''
     data = get_root_data(file) #extracting data
     matrix = np.zeros((128,128)) #creating empty matrix
@@ -215,13 +215,27 @@ def correlation_diff_event(file, gain, auto_range, event, plot=True):
     min_event = np.min(data['iEvent'])
     half = (max_event - min_event - 1)/2
     mid = min_event + half
- 
-    if event == 'half':
-        event_nums = half
+
+    if type(event) == int:
+        event_list_1 = []
+        event_list_2 = []
+        i = 0
+        base = 0
+        for i in range((max_event-min_event-2)//(2*event) - 1):
+            base = i * event*2 + 1
+            if i == 0:
+                event_list_1.extend(range(base+min_event, base + event+min_event))
+                event_list_2.extend(range(base+event+min_event, base + event*2+min_event)) 
+            event_list_1.extend(range(base+event*2+min_event, base+event*3+min_event))
+            event_list_2.extend(range(base+event*3+min_event, base+event*4+min_event))
+            i += 1
+
+
+    event_nums = half
         
     corr_hist = []
     for i in range(128):
-        for j in range(i + 1):
+        for j in range(128):
             #compares even events to odd events
             if event == "even_odd":
                 data_chan_i = data[(data['febChannel']==i) & (data['gain']==gain)].iloc[1::2]
@@ -229,13 +243,21 @@ def correlation_diff_event(file, gain, auto_range, event, plot=True):
             
             #compares event i to event i+event
             elif type(event) == int:
-                data_chan_i = data[(data['febChannel']==i) & (data['gain']==gain)].iloc[:-event:1]
-                data_chan_j = data[(data['febChannel']==j) & (data['gain']==gain)].iloc[event::1]
+                data_chan_i = data[(data['febChannel']==i) & (data['gain']==gain) & (data['iEvent'].isin(event_list_1))]
+                data_chan_j = data[(data['febChannel']==j) & (data['gain']==gain) & (data['iEvent'].isin(event_list_2))]
 
             #compares event i to event i+1/2max_event
             elif event == 'half':
                 data_chan_i = data[(data['febChannel']==i) & (min_event <= data['iEvent']) & (data['iEvent'] < min_event + event_nums)]
                 data_chan_j = data[(data['febChannel']==j) & (mid < data['iEvent']) & (data['iEvent'] <= mid + event_nums)]
+
+            #Used to check statistical properties of correlations
+            elif event[0] == 'n_event':
+                data_chan_i_half = data[(data['febChannel']==i) & (min_event <= data['iEvent']) & (data['iEvent'] < min_event + event_nums)]
+                data_chan_j_half = data[(data['febChannel']==j) & (mid < data['iEvent']) & (data['iEvent'] <= mid + event_nums)]
+                
+                data_chan_i = data_chan_i_half.head(event[1])
+                data_chan_j = data_chan_j_half.head(event[1])
             
             else:
                 print(r'Invalid event, must be one of: "even_odd", an integer, or "half"')
@@ -244,21 +266,22 @@ def correlation_diff_event(file, gain, auto_range, event, plot=True):
             #creating arrays of data
             A = np.array(data_chan_i['ADC'].to_numpy().flatten(), dtype=np.float64)
             B = np.array(data_chan_j['ADC'].to_numpy().flatten(), dtype=np.float64)
+            
             if len(A) != len(B): #skipping if arrays are different lenghts 
                 continue
             
-            #corr_coefficient = (np.mean(A*B) - np.mean(A)*np.mean(B))/(np.std(A)*np.std(B)) #calculating Pearson correlation coefficient
+            #calculating Pearson correlation coefficient
             corr_coefficient = pearsonr(A,B)[0]
-            #populating matrix depending on auto_range settings
+            
+            #populating matrix 
             matrix[i][j] = corr_coefficient
-            matrix[j][i] = corr_coefficient
             
             corr_hist.append(corr_coefficient)
 
         print(f'{round((i/127)*100, 1)}%') #progress tracker
     
     N = len(A)
-    #defining color range if auto_range == True
+    #defining color range if auto_range == 0
     if auto_range == 0:
         max_v = max([abs(np.max(matrix)), abs(np.min(matrix))])
     else:
@@ -270,9 +293,11 @@ def correlation_diff_event(file, gain, auto_range, event, plot=True):
         gain_title = 'Hi'
     
     if plot:
+        if not os.path.exists(f'plots_{file.split('/')[-1]}'):
+            os.mkdir(f'plots_{file.split('/')[-1]}')
         #plotting
         plt.figure(figsize=(15,15))
-        plt.title(f'febChannel Correlation Unrelated, {gain_title} gain', fontsize=30)
+        plt.title(f'Unrelated Correlation, {gain_title} gain', fontsize=30)
         plt.ylim(0, 127)
         plt.xlabel('febChannel', fontsize=30, loc='right')
         plt.ylabel('febChannel', fontsize=30, loc='top')
@@ -288,7 +313,7 @@ def correlation_diff_event(file, gain, auto_range, event, plot=True):
         ax.yaxis.set_ticks_position('both')
         # Create the imshow
         plt.imshow(matrix, extent=[ 0,matrix.shape[1], matrix.shape[0],0], vmin=-max_v,vmax=max_v, cmap='bwr')
-        cbar = plt.colorbar(shrink=0.78)
+        cbar = plt.colorbar(shrink=0.72)
         cbar.ax.tick_params(labelsize=20)  # Set the fontsize for the colorbar ticks
         cbar.set_label('Correlation Coeff', fontsize=30)
         plt.tick_params(labelsize=25)
@@ -313,21 +338,31 @@ def correlation_diff_event(file, gain, auto_range, event, plot=True):
         plt.legend(fontsize=25)
         plt.tight_layout()
         plt.savefig(f'plots_{file.split('/')[-1]}/unrelated_correlation_histo_gain{gain}_event_{event}.png', bbox_inches='tight')
-    
+
     return [N, np.std(corr_hist)]
 
 def corr_vs_n(file, events, gain):
+    '''
+    Calculates and plots the correlation coefficient RMS vs the number of entries used to calculate them.
+    file == path to data file
+    events == list of number of events to be used, max must be less then half total entries
+    gain == 1 or 0
+    '''
+    
+    #calculating RMS for each number of entries
     ns = []
     stds = []
     for i in events:
-        data = correlation_diff_event(file, gain, int(i), False)
+        data = correlation_diff_event(file, gain, 0, ('n_event', int(i)), False)
         ns.append(data[0])
         stds.append(data[1])
         print(i)
-        
+    
+    #getting theoretical line (slope 1/2)
     a = ((np.log(stds[0]) + np.log(ns[0])/2) + (np.log(stds[-1]) + np.log(ns[-1])/2))/2
     y = lambda x: -x/2 + a
     
+    #Plotting
     if gain == 0:
         gain_title = 'Lo'
     else:
@@ -410,27 +445,36 @@ def ADC_event(file, gain, event_range=False):
         cbar.set_label('# Entries', fontsize=30)
         
         #calcualting avg and stdev per bin
-        avg_adc = []
-        bin_lst = []
-        std_up_adc = []
-        std_down_adc = []
+        data_bin = data_feb[(data_feb['iEvent'] <= hist[1][1]) & (data_feb['iEvent'] > hist[1][0])]
+        avg_adc_0 = np.mean(data_bin['ADC'])
+        avg_adc = [avg_adc_0]
+        bin_lst = [-1]
+        if not event_range:
+            bin_width = np.max(data_feb['iEvent'])/(len(hist[1]) - 1)
+        else:
+            bin_width = (event_range[1] - event_range[0])/(len(hist[1]) - 1)
+            
         for i in range(len(hist[1]) - 1):
             data_bin = data_feb[(data_feb['iEvent'] <= hist[1][i+1]) & (data_feb['iEvent'] > hist[1][i])]
             avg_adc.append(np.mean(data_bin['ADC']))
-            std_up_adc.append(avg_adc[-1] + np.std(data_bin['ADC']))
-            std_down_adc.append(avg_adc[-1] - np.std(data_bin['ADC']))
+            std_up_adc = avg_adc[-1] + np.std(data_bin['ADC'])/np.sqrt(len(data_bin['ADC'].to_numpy().flatten()))
+            std_down_adc = avg_adc[-1] - np.std(data_bin['ADC'])/np.sqrt(len(data_bin['ADC'].to_numpy().flatten()))
             bin_lst.append(hist[1][i+1])
+            plt.plot([bin_lst[-1]-bin_width/2,bin_lst[-1]-bin_width/2],[std_up_adc,std_down_adc],color='orange')
 
         #plotting avg and stdev
-        plt.step(bin_lst,avg_adc,color='red', label='Mean/bin')
-        plt.step(bin_lst,std_up_adc,color='red', linestyle='--', label='Stdev/bin')
-        plt.step(bin_lst,std_down_adc,color='red', linestyle='--')
+        plt.step(bin_lst,avg_adc,color='red', label='Mean per bin')
+        plt.step(np.nan,np.nan,color='orange', label='Mean error per bin')
         plt.legend(fontsize=20)
         plt.tight_layout()
-        plt.savefig(f'plots_{file.split('/')[-1]}/ADC_iEvent_2d/channel_{chan}_gain{gain}.png', bbox_inches='tight')
+        if not os.path.exists(f'../plots_{file.split('/')[-1]}/ADC_iEvent_2d'):
+            os.mkdir(f'../plots_{file.split('/')[-1]}/ADC_iEvent_2d')
+        plt.savefig(f'../plots_{file.split('/')[-1]}/ADC_iEvent_2d/channel_{chan}_gain{gain}.png', bbox_inches='tight')
+        plt.clf()
 
 def auto_correlation(file, gain, chan, auto_range=True):
     '''
+    NOT FUNCTIONAL, ROUGH DRAFT
     '''
     data = get_root_data(file) #extracting data
     data_chan = data[(data['febChannel'] == chan) & (data['gain'] == gain)]
@@ -558,6 +602,8 @@ def gaussian(x, amp, mean, stddev):
 def coherent_noise(file, gain):
     '''
     Plots a coherent noise plot for the specified file and gain
+    file == path to root file
+    gain == 1 or 0
     '''
     data = get_root_data(file) #getting data
 
@@ -636,6 +682,11 @@ def coherent_noise(file, gain):
     plt.savefig(f'plots_{file.split('/')[-1]}/coherence_hist_{gain}.png', bbox_inches='tight')
     
 def coh_corr(file,gain):
+    '''
+    Calculates coherent noise using measured covariances, good check for function above
+    file == path to root file
+    gain == 1 or 0
+    '''
     data = get_root_data(file) #extracting data
     matrix = np.zeros((128,128)) #creating empty matrix
     
@@ -647,14 +698,6 @@ def coh_corr(file,gain):
             data_chan_j = data[(data['febChannel']==j) & (data['gain']==gain)]
             #Used if only one time entrie is desired
             
-            '''
-            #taking first time entry for each event
-            for n in data_chan_i:
-                A.append(n[0])
-            for m in data_chan_j:
-                B.append(m[0])
-            
-            '''
             #creating arrays of data
             A = np.array(data_chan_i['ADC'].to_numpy().flatten(), dtype=np.float64)
             B = np.array(data_chan_j['ADC'].to_numpy().flatten(), dtype=np.float64)
@@ -667,12 +710,14 @@ def coh_corr(file,gain):
             #populating matrix depending on auto_range settings
             corr_sum += corr_coefficient
 
-        print(f'{round((i/127)*100, 1)}%') #progress tracke
+        print(f'{round((i/127)*100, 1)}%') #progress tracker
     
-    return np.sqrt(2*corr_sum)/128
+    return np.sqrt(2*corr_sum)/128 #returnes coherent noise per chan calculated using measured covariences
 
 def covariance(file):
     '''
+    Plots covariance matrixes for both hi and lo gain
+    file == path to root file
     '''
     data = get_root_data(file) #extracting data
     matrix_hi = np.zeros((128,128)) #creating empty matrix
@@ -685,27 +730,16 @@ def covariance(file):
             data_chan_j_hi = data[(data['febChannel']==j) & (data['gain']==1)]
             data_chan_i_lo = data[(data['febChannel']==i) & (data['gain']==0)]
             data_chan_j_lo = data[(data['febChannel']==j) & (data['gain']==0)]
-            
-            #Used if only one time entrie is desired
-            
-            '''
-            #taking first time entry for each event
-            for n in data_chan_i:
-                A.append(n[0])
-            for m in data_chan_j:
-                B.append(m[0])
-            
-            '''
+
             #creating arrays of data
             A_hi = np.array(data_chan_i_hi['ADC'].to_numpy().flatten(), dtype=np.float64)
             B_hi = np.array(data_chan_j_hi['ADC'].to_numpy().flatten(), dtype=np.float64)
             A_lo = np.array(data_chan_i_lo['ADC'].to_numpy().flatten(), dtype=np.float64)
             B_lo = np.array(data_chan_j_lo['ADC'].to_numpy().flatten(), dtype=np.float64)
 
-            #if len(A) != len(B) or not np.array_equal(data_chan_i_['iEvent'].to_numpy(),data_chan_j['iEvent'].to_numpy()): #skipping if arrays are different lenghts 
-                #continue
+            if len(A_hi) != len(B_hi) or not np.array_equal(data_chan_i_hi['iEvent'].to_numpy(),data_chan_j_hi['iEvent'].to_numpy()): #skipping if arrays are different lenghts 
+                continue
             
-            #corr_coefficient = (np.mean(A*B) - np.mean(A)*np.mean(B))/(np.std(A)*np.std(B)) #calculating Pearson correlation coefficient
             if i != j:
                 matrix_hi[i][j] = np.mean(A_hi*B_hi) - np.mean(A_hi)*np.mean(B_hi)
                 matrix_hi[j][i] = np.mean(A_hi*B_hi) - np.mean(A_hi)*np.mean(B_hi)
@@ -739,9 +773,18 @@ def covariance(file):
     plt.savefig(f'../plots/{file.split('/')[-1]}_channel_gain0_cov.png')
 
 def FFT_avg(file,gain,sample):
+    '''
+    Takes the average FFT value over all febChannels
+    file == path to root file
+    gain == 1 or 0
+    sample == desired time sample to take for each event (0 to 24)
+    '''
+    #extract data
     data = get_root_data(file)
-    fs = 200
     
+    fs = 200 #defining sample rate 
+    
+    #calculating FFT for all febChannels
     fft_res_list = []
     for chan in range(128):
         data_chan = data[(data['febChannel']==chan) & (data['gain']==gain)]
@@ -789,6 +832,13 @@ def FFT_avg(file,gain,sample):
     plt.savefig(f'../plots/fft_avg_{gain}_{sample}.png')
     
 def FFT(file,gain,sample):
+    '''
+    Plots FFTs for all febChannels
+    file == path to root file
+    gain == 1 or 0
+    sample == desired time sample to take for each event (0 to 24)
+    '''
+    
     data = get_root_data(file)
     
     for chan in range(128):
@@ -860,12 +910,19 @@ def FFT(file,gain,sample):
         plt.savefig(f'plots_{file.split('/')[-1]}/FFTs/channel_{chan}_gain{gain}_sample{sample}.png')
 
 def FFT_hist(file,gain,sample, bin_num):
+    '''
+    Plot the max power spectrum in specified freq bins for all febChannels. Used to get broad understading of all channels FFTs
+    file == path to root file
+    gain == 1 or 0
+    sample == desired time sample to take for each event (0 to 24)
+    bin_num == number of frequency bins
+    '''
+    
     data = get_root_data(file)
     matrix = np.zeros((bin_num,128))
     fs = 200  # Sampling frequency in Hz
     
-    ffts = []
-    freqs = []
+    #getting all FFTs
     for chan in range(128):
         data_chan = data[(data['febChannel']==chan) & (data['gain']==gain)]
 
@@ -885,6 +942,8 @@ def FFT_hist(file,gain,sample, bin_num):
             bin_avg = np.max(fft_result[j:j+num_elements])
             matrix[i][chan] = bin_avg
             j += num_elements
+    
+    #setting 0s to nan and plotting
     matrix[matrix == 0] = np.nan
     if gain == 0:
         gain_title = 'Lo'
@@ -908,6 +967,7 @@ def FFT_hist(file,gain,sample, bin_num):
     cbar.ax.tick_params(labelsize=20)  # Set the fontsize for the colorbar ticks
     cbar.set_label('Max FFT Magnitude', fontsize=30)
 
+    #Fxing ticks
     old_tick = []
     new_tick = []
     for i in range(6):
@@ -919,13 +979,23 @@ def FFT_hist(file,gain,sample, bin_num):
     return matrix
     
 def chi_2(file, file2, gain, channel=False):
+    '''
+    Plots the difference in a chi^2 gaussian fit of ADC distribution of two different root files to check if data has improved
+    file == path to root file
+    file2 == path to root file
+    gain == 1 or 0
+    channel == Used to plot ADC hist of both files for specified channel
+    '''
+    #getting data
     data_1 = get_root_data(file)
     data_2 = get_root_data(file2)
     
+    #plotting chi^2 diff if channel not specified
     if not channel:
         chis_1 = []
         chis_2 = []
         chans = []
+        #fitting all channels with a gaussian
         for chan in range(128):
             data_chan = data_1[(data_1['febChannel'] == chan) & (data_1['gain'] == gain)]
             ADC = data_chan['ADC'].to_numpy().flatten()
@@ -955,6 +1025,8 @@ def chi_2(file, file2, gain, channel=False):
                 fitted_values.append(gaussian(x,*params))
             chi_squared = np.sum(((hist - fitted_values) ** 2) / fitted_values)
             chis_2.append(chi_squared)
+        
+        #plotting
         if gain == 0:
             gain_title = 'Lo'
             
@@ -999,7 +1071,7 @@ def chi_2(file, file2, gain, channel=False):
         plt.savefig(f'../plots/chi_2_diff_{gain}.png')
         
         return
-        
+    #if channel arg given then plotting ADC hist for both files with gaussian fits    
     data_chan = data_1[(data_1['febChannel'] == channel) & (data_1['gain'] == gain)]
     ADC1 = data_chan['ADC'].to_numpy().flatten()
     bins = np.max(ADC1) - np.min(ADC1)
@@ -1039,9 +1111,16 @@ def chi_2(file, file2, gain, channel=False):
     return
 
 def check_calibration(file1,file2,gain):
+    '''
+    Checks effectiveness of calibration between two root files
+    file1 == path to first root file
+    file2 == path to second root file
+    gain == 1 or 0
+    '''
     data_1 = get_root_data(file1)
     data_2 = get_root_data(file2)
     
+    #getting means and rms for both data sets for all febChannels
     rms_1 = []
     rms_2 = []
     mean_1 = []
@@ -1063,11 +1142,13 @@ def check_calibration(file1,file2,gain):
     mean_2 = np.array(mean_2)
     N = np.array(N)
     
+    #getting diff and errors
     rms_diff = rms_1 - rms_2
     rms_err = np.sqrt((rms_1**2 + rms_2**2)/(2*N))
     mean_diff = np.array(mean_1) - np.array(mean_2)
     mean_err = np.sqrt((rms_1**2 + rms_2**2)/(N))
     
+    #plotting html
     if gain == 0:
         gain_title = 'Lo'
         
@@ -1119,6 +1200,7 @@ def check_calibration(file1,file2,gain):
     show(p2)
 
     
+    #plotting matplotlib
     # plt.figure(figsize=(12,9))
     # plt.title(f'$\\Delta$ ADC RMS per febChannel, {gain_title} gain', fontsize=30)
     # plt.xlabel('febChannel', fontsize=30, loc='right')
@@ -1162,6 +1244,11 @@ def check_calibration(file1,file2,gain):
     # plt.savefig(f'../plots/calib_mean_check_{gain}.png')
     
 def quantiles(file1,file2,gain):
+    '''
+    NOT FUNCTIONAL
+    Checking quantiles
+    '''
+    
     data1 = get_root_data(file1)
     data2 = get_root_data(file2)
     
@@ -1259,6 +1346,10 @@ def quantiles(file1,file2,gain):
     # show(p1)
     
 def odd_even(file1,file2,gain):
+    '''
+    NOT FUNCTIONAL
+    Used to study odd even effect
+    '''
     data1 = get_root_data(file1)
     data2 = get_root_data(file2)
     
@@ -1296,7 +1387,6 @@ def odd_even(file1,file2,gain):
     
     # Step 4: Add scatter points
     show(p1)
-
 
 if __name__ == "__main__":
     file_name = args[1]
