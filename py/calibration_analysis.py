@@ -13,6 +13,18 @@ import sys
 import os
 args = sys.argv
 
+calib_file_1 = "../data/output-CalibrationHG-mxhct22l-32Measurements-merged.root:Data"  #Fourth data set -- calibration testing with 32 measurements. Many issues such as 0 stdev on many entries.
+
+calib_file_2 = "../data/output-dataHG-mxhct22l-calibset-2024-10-07.root:Data"
+
+calib_file_3_HG = "../data/output-MDACCALIBRATION-HG-mxhct22l-2024-10-10.root:Data"
+
+calib_file_3_LG = "../data/output-MDACCALIBRATION-LG-mxhct22l-2024-10-10.root:Data"
+
+calib_file_4_LG = "../data/output-CALIB-LG-mxhct22l-2024-10-17.root:Data"
+
+json_file_1 = "../data/calibFile-MDACCalib-2024-10-10.json"
+
 def get_root_data(file):
     '''
     Extracts data from root file into a pandas data frame
