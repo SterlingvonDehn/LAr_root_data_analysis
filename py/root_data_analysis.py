@@ -13,17 +13,8 @@ from bokeh.plotting import figure, show
 from bokeh.io import output_file
 import sys
 import os
-import dask.dataframe as dd
 
 args = sys.argv
-
-file_1 = "../data/output-data-fullfeb2v2-20240910.root:Data" #First data set -- data taken in 4 "chuncks"
-
-file_2 = "../data/output-data-MXSX-hct20l-2024-09-18.root:Data" #Second data set -- Full feb data taken, issue with iEvent
-
-file_3 = "../data/output-data-MXSX-hct20l-2024-09-23.root:Data" #Third data set -- Same as second but iEvent error corrected
-
-file_4 = "../data/output-data-hct22l-MDACCalib20241010.root" #Fourth data set -- EMF caibration instead of NEVIS
 
 def get_root_data(file):
     '''
@@ -39,28 +30,7 @@ def get_root_data(file):
         
         sorted_data = data.sort_values(by='iEvent')
         
-    return sorted_data
-
-# def get_root_data(file):
-#     '''
-#     Extracts data from root file into a pandas data frame
-#     '''
-#     if file.split(':')[-1] != 'Data':
-#         file = f'{file}:Data' 
-    
-#     with uproot.open(file) as f:
-#         print(f.keys())
-        
-#         tree = f
-#         print(tree)
-#         # Define the chunk size (number of entries per chunk)
-#         chunks = 100
-        
-#         # Iterate through the tree in chunks
-#         for chunk in tree.iterate(step_size=640000):
-#             # Process the chunk of data (as a pandas DataFrame)
-#             print(chunk)
-        
+    return sorted_data      
 
 def EMF_system_test(file):
     '''
@@ -861,171 +831,7 @@ def FFT_avg(file,gain,sample):
 
     plt.tight_layout()
     plt.savefig(f'../plots/fft_avg_{gain}_{sample}.png')
-    
-# def FFT(file,gain,sample, sampling_rate, freq_range=False):
-#     '''
-#     Plots FFTs for all febChannels
-#     file == path to root file
-#     gain == 1 or 0
-#     sample == desired time sample to take for each event (0 to 24)
-#     '''
-    
-#     data = get_root_data(file)
-#     bin_num = 20
-#     matrix = np.zeros((bin_num,128))
-#     fs = sampling_rate  # Sampling frequency in Hz
-    
-#     for chan in range(128):
-#         data_chan = data[(data['febChannel']==chan) & (data['gain']==gain)]
 
-#         signal = []
-#         for entry in data_chan['ADC']:
-#             signal.append(entry[sample])
-        
-#         adc_values = signal
-        
-#         fs = sampling_rate  # Sampling frequency in Hz
-#         N = len(adc_values)  # Number of samples
-
-#         # Step 2: Create a time vector
-#         t = np.arange(N) / fs  # Time vector based on the number of samples
-
-#         # Step 3: Compute FFT
-#         fft_result = np.fft.fft(adc_values)
-#         # Get the frequency bins
-#         frequencies = np.fft.fftfreq(N, 1/fs)
-#         fft_plot = np.abs(fft_result)[1:N//2]
-#         freq_plot = frequencies[1:N//2]
-#         num_elements = int(len(freq_plot)/bin_num)
-#         j = 0
-#         for i in range(bin_num):
-#             bin_avg = np.max(fft_plot[j:j+num_elements])
-#             matrix[i][chan] = bin_avg
-#             j += num_elements
-
-#         if gain == 0:
-#             gain_title = 'Lo'
-#         else:
-#             gain_title = 'Hi'    
-            
-#         if not os.path.exists(f'plots_{file.split('/')[-1]}'):
-#             os.mkdir(f'plots_{file.split('/')[-1]}')
-#         if not os.path.exists(f'plots_{file.split('/')[-1]}/FFTs'):
-#             os.mkdir(f'plots_{file.split('/')[-1]}/FFTs')
-#         # Step 4: Plotting the original signal
-#         plt.figure(figsize=(20, 13))
-
-#         # Plot original signal
-#         plt.subplot(3, 1, 1)
-#         plt.tick_params(labelsize=30, axis='both', which='major', direction='in', length=20)
-#         plt.tick_params(axis='both', which='minor', direction='in', length=14)
-#         ax = plt.gca()
-#         ax.xaxis.set_minor_locator(MultipleLocator(2))  # Adjust this to control minor ticks on x-axis
-#         ax.yaxis.set_minor_locator(AutoMinorLocator(5))  # Adjust this to control minor ticks on y-axis
-#         # Add major ticks on all sides
-#         ax.xaxis.set_ticks_position('both')
-#         ax.yaxis.set_ticks_position('both')
-#         plt.plot(t, adc_values)
-#         plt.title(f'ADC Signal for channel {chan}, {gain_title} gain, time sample {sample}',fontsize=25)
-#         plt.xlabel('Time [s]',fontsize=25)
-#         plt.ylabel('ADC Value',fontsize=25)
-#         plt.xlim(0,t[-1])
-#         plt.grid()
-
-#         # Step 5: Plot FFT results
-#         plt.subplot(3, 1, 2)
-#         plt.tick_params(labelsize=30, axis='both', which='major', direction='in', length=20)
-#         plt.tick_params(axis='both', which='minor', direction='in', length=14)
-#         ax = plt.gca()
-#         ax.xaxis.set_minor_locator(AutoMinorLocator(5))  # Adjust this to control minor ticks on x-axis
-#         ax.yaxis.set_minor_locator(AutoMinorLocator(5))  # Adjust this to control minor ticks on y-axis
-#         # Add major ticks on all sides
-#         ax.xaxis.set_ticks_position('both')
-#         ax.yaxis.set_ticks_position('both')
-#         plt.plot(freq_plot, fft_plot)
-#         #plt.plot(frequencies[:N//2], np.abs(fft_result)[:50])  # Plot only positive frequencies
-#         plt.title('FFT of ADC Signal',fontsize=25)
-        
-#         plt.xlabel('Frequency [Hz]',fontsize=25)
-#         #plt.xlabel('Frequency [Hz]')
-#         plt.ylabel('Magnitude',fontsize=25)
-#         if not freq_range:
-#             lo_lim = 0
-#             hi_lim = sampling_rate/2
-#         else:
-#             lo_lim = freq_range[0]
-#             hi_lim = freq_range[1]
-#         plt.xlim(lo_lim,hi_lim)# Limit x-axis to half the sampling frequency
-#         plt.grid()
-#         lo_ind = 0
-#         hi_ind = -1
-        
-#         for i,freq in enumerate(freq_plot):
-#             if freq >= lo_lim:
-#                 lo_ind = i
-#                 break
-#         for i,freq in enumerate(freq_plot[lo_ind:]):
-#             if freq >= hi_lim:
-#                 hi_ind = i
-#                 break
-#         scale_fact = np.max(fft_plot[lo_ind:hi_ind])
-#         plt.subplot(3, 1, 3)
-#         plt.tick_params(labelsize=30, axis='both', which='major', direction='in', length=20)
-#         plt.tick_params(axis='both', which='minor', direction='in', length=14)
-#         ax = plt.gca()
-#         ax.xaxis.set_minor_locator(AutoMinorLocator(5))  # Adjust this to control minor ticks on x-axis
-#         ax.yaxis.set_minor_locator(AutoMinorLocator(5))  # Adjust this to control minor ticks on y-axis
-#         # Add major ticks on all sides
-#         ax.xaxis.set_ticks_position('both')
-#         ax.yaxis.set_ticks_position('both')
-#         plt.plot(freq_plot, fft_plot/scale_fact)
-#         plt.yscale('log')
-#         #plt.plot(frequencies[:N//2], np.abs(fft_result)[:50])  # Plot only positive frequencies
-#         plt.title('log(FFT) of ADC Signal',fontsize=25)
-        
-#         plt.xlabel('Frequency [Hz]',fontsize=25)
-#         #plt.xlabel('Frequency [Hz]')
-#         plt.ylabel('log(Magnitude)',fontsize=25)
-#         plt.xlim(lo_lim,hi_lim)# Limit x-axis to half the sampling frequency
-#         plt.grid()
-
-#         plt.tight_layout()
-#         plt.savefig(f'plots_{file.split('/')[-1]}/FFTs/channel_{chan}_gain{gain}_sample{sample}.png')
-#         plt.clf()
-    
-#     matrix[matrix == 0] = np.nan
-#     if gain == 0:
-#         gain_title = 'Lo'
-#     else:
-#         gain_title = 'Hi' 
-#     plt.figure(figsize=(15,12))
-#     plt.tick_params(labelsize=30, axis='both', which='major', direction='in', length=20)
-#     plt.tick_params(axis='both', which='minor', direction='in', length=14)
-#     ax = plt.gca()
-#     ax.xaxis.set_minor_locator(MultipleLocator(2))  # Adjust this to control minor ticks on x-axis
-#     ax.yaxis.set_minor_locator(AutoMinorLocator(5))  # Adjust this to control minor ticks on y-axis
-#     # Add major ticks on all sides
-#     ax.xaxis.set_ticks_position('both')
-#     ax.yaxis.set_ticks_position('both')
-#     plt.title(f'Max FFT Magnitude for febChannels, {gain_title} gain', fontsize=30)
-#     plt.xlabel('febChanel', fontsize=30,loc='right')
-#     plt.ylabel('Frequency [Hz]', fontsize=30,loc='top')
-#     plt.ylim(0,bin_num)
-#     plt.imshow(matrix,norm=LogNorm(), extent=[0, matrix.shape[1], matrix.shape[0],0],aspect=4)
-#     cbar = plt.colorbar(shrink=0.6)
-#     cbar.ax.tick_params(labelsize=20)  # Set the fontsize for the colorbar ticks
-#     cbar.set_label('Max FFT Magnitude', fontsize=30)
-
-#     #Fxing ticks
-#     old_tick = []
-#     new_tick = []
-#     for i in range(6):
-#         old_tick.append(i*(bin_num/5))
-#         new_tick.append(int(i*sampling_rate/10))
-#     plt.yticks(ticks=old_tick, labels=new_tick)
-#     plt.tight_layout()
-#     plt.savefig(f'plots_{file.split('/')[-1]}/FFT_hist_{gain}.png', bbox_inches='tight')
-#     return matrix
 
 def FFT(file, gain, sample, sampling_rate, freq_range=False):
     '''
@@ -1736,86 +1542,54 @@ def check_diff_bcids(file, gain, bcids):
     plt.savefig(f'plots_{file.split("/")[-1]}/bcid_diff_gain{gain}.png')
     return means
 
-# def adc_vs_bcid(file,gain):
-#     plot_dir = f'plots_{file.split("/")[-1]}'
-#     sub_dir = f'{plot_dir}/mean_ADC_bcid'
-#     os.makedirs(sub_dir, exist_ok=True)
-#     data = get_root_data(file)
-#     gain_title = 'Lo' if gain == 0 else 'Hi'
-#     for chan in range(128):
-#         data_chan = data[(data['febChannel'] == chan) & (data['gain'] == gain)]
-#         adc = data_chan['ADC'].to_numpy().flatten()
-#         bcid = data_chan['bcid'].to_numpy().flatten()
-#         results = np.column_stack((bcid,adc))
-#         ADC_means = []
-#         ADC_rms = []
-#         bcids = []
-#         for bcid in range(3564):
-#             bcid_adc = [entry[1] for entry in results if entry[0] == bcid]
-#             ADC_means.append(np.mean(bcid_adc))
-#             ADC_rms.append(np.std(bcid_adc/np.sqrt(len(bcid_adc))))
-#             bcids.append(bcid)
-#         # Plotting
-#         plt.figure(figsize=(15, 11))
-#         plt.title(f'Mean ADC vs BCID, channel {chan}, {gain_title} gain', fontsize=30)
-#         plt.xlabel('BCID', fontsize=30, loc='right')
-#         plt.ylabel('Mean ADC', fontsize=30, loc='top')
-#         plt.xlim(0, 3563)
-#         plt.tick_params(labelsize=30, axis='both', which='major', direction='in', length=20)
-#         plt.tick_params(axis='both', which='minor', direction='in', length=14)
-
-#         ax = plt.gca()
-#         ax.xaxis.set_minor_locator(AutoMinorLocator(5))
-#         ax.yaxis.set_minor_locator(AutoMinorLocator(5))
-#         ax.xaxis.set_ticks_position('both')
-#         ax.yaxis.set_ticks_position('both')
-        
-#         plt.errorbar(bcids, ADC_means, yerr=ADC_rms, fmt='o', color='blue', label='Mean ADC', capsize=2, markersize=3)
-#         plt.legend(fontsize=20)
-#         plt.tight_layout()
-#         plt.savefig(f'plots_{file.split("/")[-1]}/mean_ADC_bcid/chan{chan}_gain{gain}.png')
-
-
-def adc_vs_bcid(file, gain):
+def adc_vs_bcid(file, gain, tot_events):
     plot_dir = f'plots_{file.split("/")[-1]}'
     sub_dir = f'{plot_dir}/mean_ADC_bcid'
     os.makedirs(sub_dir, exist_ok=True)
-    
-    # Fetch data from ROOT file
-    data = get_root_data(file)
-    
-    # Title based on gain
-    gain_title = 'Lo' if gain == 0 else 'Hi'
-    
-    # Define the fixed length for the y-axis
-    fixed_length = 13  # For example, a length of 2 units
-    
-    # Iterate over channels
-    for chan in range(128):
-        # Filter data for the current channel and gain
-        data_chan = data[(data['febChannel'] == chan) & (data['gain'] == gain)]
-        
-        # Extract relevant data
-        adc = data_chan['ADC'].to_numpy()
-        bcid = data_chan['bcid'].to_numpy()
-        
-        # Get unique BCIDs
-        unique_bcid = np.unique(bcid)
-        
-        # Initialize lists for results
-        ADC_means = np.zeros(len(unique_bcid))
-        ADC_rms = np.zeros(len(unique_bcid))
-        
-        # Loop through unique BCIDs
-        for i, b in enumerate(unique_bcid):
-            # Get all ADC values for the current BCID
-            bcid_adc = adc[bcid == b]
-            
-            # Compute mean and RMS
-            ADC_means[i] = np.mean(bcid_adc)
-            ADC_rms[i] = np.std(bcid_adc) / np.sqrt(len(bcid_adc))
-        
 
+    gain_title = 'Lo' if gain == 0 else 'Hi'
+
+    # Define the fixed length for the y-axis
+    fixed_length = 3  # For example, a length of 2 units
+
+    if file.split(':')[-1] != 'Data':
+        file = f'{file}:Data' 
+
+    with uproot.open(file) as f:
+        print(f.keys())
+    
+        tree = f
+        # Define the chunk size (number of entries per chunk)
+    for chan in range(128):
+    
+        chan_mean = {key: [] for key in range(3564)}
+        # Iterate through the tree in chunks
+        for chunk in tree.iterate(step_size=348000):
+            # Process the chunk of data (as a pandas DataFrame)
+            data = chunk
+        
+            # Filter data for the current channel and gain using Dask
+            data_chan = data[(data['febChannel'] == chan) & (data['gain'] == gain)]
+        
+            #Extract relevant data
+            adc = data_chan['ADC'].to_numpy()
+            bcid = data_chan['bcid'].to_numpy()
+
+            unique_bcid = np.unique(bcid)
+        
+            # Loop through unique BCIDs
+            for b in unique_bcid:
+                # Get all ADC values for the current BCID
+                bcid_adc = adc[bcid == b]
+            
+                # Compute mean and RMS
+                chan_mean[b].extend(bcid_adc)
+        
+            if data['iEvent'][-1] == tot_events:
+                break
+            
+        ADC_means = [np.mean(chan_mean[bcid]) for bcid in range(3564)]
+        ADC_rms = [np.std(chan_mean[bcid])/np.sqrt(len(chan_mean[bcid])) for bcid in range(3564)]
         # Get the current y limits based on the data
         ymin, ymax = min(ADC_means), max(ADC_means)
 
@@ -1824,7 +1598,7 @@ def adc_vs_bcid(file, gain):
 
         # Set the new y limits, ensuring the total length is fixed
         y_margin = fixed_length / 2
-        
+    
         # Plotting
         plt.figure(figsize=(15, 11))
         plt.title(f'Mean ADC vs BCID, channel {chan}, {gain_title} gain', fontsize=30)
@@ -1834,125 +1608,42 @@ def adc_vs_bcid(file, gain):
         plt.ylim(midpoint - y_margin, midpoint + y_margin)
         plt.tick_params(labelsize=30, axis='both', which='major', direction='in', length=20)
         plt.tick_params(axis='both', which='minor', direction='in', length=14)
-        
+    
         ax = plt.gca()
         ax.xaxis.set_minor_locator(AutoMinorLocator(5))
         ax.yaxis.set_minor_locator(AutoMinorLocator(5))
         ax.xaxis.set_ticks_position('both')
         ax.yaxis.set_ticks_position('both')
-        
+    
         # Error bar plot
-        plt.errorbar(unique_bcid, ADC_means, yerr=ADC_rms, fmt='o', color='black',ecolor='blue', label='Mean ADC', capsize=2, markersize=2)
+        plt.errorbar(list(chan_mean.keys()), ADC_means, yerr=ADC_rms, fmt='o', color='black',ecolor='blue', label='Mean ADC', capsize=2, markersize=2)
         plt.legend(fontsize=20)
         plt.tight_layout()
-        
+    
         # Save the plot
         plt.savefig(f'{sub_dir}/chan{chan}_gain{gain}.png')
         plt.close()
-
-# def adc_vs_bcid(file, gain, tot_events):
-#     plot_dir = f'plots_{file.split("/")[-1]}'
-#     sub_dir = f'{plot_dir}/mean_ADC_bcid'
-#     os.makedirs(sub_dir, exist_ok=True)
-    
-#     gain_title = 'Lo' if gain == 0 else 'Hi'
-    
-#     # Define the fixed length for the y-axis
-#     fixed_length = 13  # For example, a length of 2 units
-    
-#     if file.split(':')[-1] != 'Data':
-#         file = f'{file}:Data' 
-    
-#     with uproot.open(file) as f:
-#         print(f.keys())
         
-#         tree = f
-#         # Define the chunk size (number of entries per chunk)
-#     for chan in range(128):
-        
-#         chan_mean = {key: [] for key in range(3564)}
-#         chan_rms = {key: [] for key in range(3564)}
-#         # Iterate through the tree in chunks
-#         for chunk in tree.iterate(step_size=640000):
-#             # Process the chunk of data (as a pandas DataFrame)
-#             data = chunk
-            
-#             # Filter data for the current channel and gain using Dask
-#             data_chan = data[(data['febChannel'] == chan) & (data['gain'] == gain)]
-            
-#             #Extract relevant data
-#             adc = data_chan['ADC'].to_numpy()
-#             bcid = data_chan['bcid'].to_numpy()
+if __name__ == "__main__":
+    file_name = args[1]
+    data = get_root_data(file_name)
+    tot_events = np.max(data['iEvent'])
+    gains = np.unique(data['gain'].to_numpy())
+    if not os.path.exists(f'plots_{file_name.split('/')[-1]}'):
+        os.mkdir(f'plots_{file_name.split('/')[-1]}')
+    EMF_system_test(file_name)
+    for gain in gains:
+        correlation(file_name,gain,0)
+        correlation_diff_event(file_name,gain,0, 'even_odd')
+        correlation_diff_event(file_name,gain,0, 'half')
+        coherent_noise(file_name,gain)
+        FFT_hist(file_name,gain,0,20)
 
-#             unique_bcid = np.unique(bcid)
-            
-#             # Loop through unique BCIDs
-#             for i, b in enumerate(unique_bcid):
-#                 # Get all ADC values for the current BCID
-#                 bcid_adc = adc[bcid == b]
-                
-#                 # Compute mean and RMS
-#                 chan_mean[b].append(np.mean(bcid_adc))
-#                 chan_rms[b].append(np.std(bcid_adc) / np.sqrt(len(bcid_adc)))
-            
-#             if data['iEvent'][-1] == tot_events:
-#                 break
-        
-#         ADC_means = [np.mean(values) for values in chan_mean.values()]
-#         ADC_rms = [np.mean(values) for values in chan_rms.values()]
-#         # Get the current y limits based on the data
-#         ymin, ymax = min(ADC_means), max(ADC_means)
-
-#         # Calculate the midpoint of the data to center the y-axis
-#         midpoint = (ymin + ymax) / 2
-
-#         # Set the new y limits, ensuring the total length is fixed
-#         y_margin = fixed_length / 2
-        
-#         # Plotting
-#         plt.figure(figsize=(15, 11))
-#         plt.title(f'Mean ADC vs BCID, channel {chan}, {gain_title} gain', fontsize=30)
-#         plt.xlabel('BCID', fontsize=30, loc='right')
-#         plt.ylabel('Mean ADC', fontsize=30, loc='top')
-#         plt.xlim(0, 3563)
-#         # plt.ylim(midpoint - y_margin, midpoint + y_margin)
-#         plt.tick_params(labelsize=30, axis='both', which='major', direction='in', length=20)
-#         plt.tick_params(axis='both', which='minor', direction='in', length=14)
-        
-#         ax = plt.gca()
-#         ax.xaxis.set_minor_locator(AutoMinorLocator(5))
-#         ax.yaxis.set_minor_locator(AutoMinorLocator(5))
-#         ax.xaxis.set_ticks_position('both')
-#         ax.yaxis.set_ticks_position('both')
-        
-#         # Error bar plot
-#         plt.errorbar(list(chan_mean.keys()), ADC_means, yerr=ADC_rms, fmt='o', color='black',ecolor='blue', label='Mean ADC', capsize=2, markersize=2)
-#         plt.legend(fontsize=20)
-#         plt.tight_layout()
-        
-#         # Save the plot
-#         plt.savefig(f'{sub_dir}/chan{chan}_gain{gain}.png')
-#         plt.close()
-            
-#         return
-
-
-# if __name__ == "__main__":
-#     file_name = args[1]
-#     if not os.path.exists(f'plots_{file_name.split('/')[-1]}'):
-#         os.mkdir(f'plots_{file_name.split('/')[-1]}')
-#     EMF_system_test(file_name)
-#     for gain in range(2):
-#         correlation(file_name,gain,0)
-#         correlation_diff_event(file_name,gain,0, 'even_odd')
-#         correlation_diff_event(file_name,gain,0, 'half')
-#         coherent_noise(file_name,gain)
-#         FFT_hist(file_name,gain,0,20)
-
-#         if not os.path.exists(f'plots_{file_name.split('/')[-1]}/ADC_iEvent_2d'):
-#             os.mkdir(f'plots_{file_name.split('/')[-1]}/ADC_iEvent_2d')
-#         if not os.path.exists(f'plots_{file_name.split('/')[-1]}/FFTs'):
-#             os.mkdir(f'plots_{file_name.split('/')[-1]}/FFTs')
-#         ADC_event(file_name, gain)
-#         FFT(file_name,gain,0)
+        if not os.path.exists(f'plots_{file_name.split('/')[-1]}/ADC_iEvent_2d'):
+            os.mkdir(f'plots_{file_name.split('/')[-1]}/ADC_iEvent_2d')
+        if not os.path.exists(f'plots_{file_name.split('/')[-1]}/FFTs'):
+            os.mkdir(f'plots_{file_name.split('/')[-1]}/FFTs')
+        ADC_event(file_name, gain)
+        FFT(file_name,gain,0, args[2])
+        adc_vs_bcid(file_name, gain)
     
