@@ -12,11 +12,11 @@ import os
 
 args = sys.argv
 
-file_name = '../data/output-data-MXSX-hct20l-2024-09-23.root' #Enter path to root file here
+file_name = '' #Enter path to root file here
 
-sample_rate = 200 #Enter event sample rate in Hz here
+sample_rate = None #Enter event sample rate in Hz here
 
-gains = [0,1] #Enter gain titles here in list for. Ie if only hi gain enter [1]
+gains = [] #Enter gain titles here in list for. Ie if only hi gain enter [1]
 
 if not os.path.exists(file_name):
     print('ENTER VALID FILE NAME')
@@ -24,6 +24,10 @@ if not os.path.exists(file_name):
     
 if sample_rate == None:
     print('ENTER A SAMPLE RATE')
+    sys.exit()
+
+if len(gains) == 0:
+    print('ENTER VALID GAIN VALUES')
     sys.exit()
 
 plot_dir = f'plots_{file_name.split("/")[-1]}'
