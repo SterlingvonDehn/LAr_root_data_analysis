@@ -6,24 +6,18 @@ from matplotlib.ticker import MultipleLocator
 import json
 from matplotlib.ticker import AutoMinorLocator
 from matplotlib.colors import LogNorm
-from bokeh.plotting import figure, show
-from bokeh.io import output_file
 import sqlite3
 import sys
 import os
-args = sys.argv
 
-calib_file_1 = "../data/output-CalibrationHG-mxhct22l-32Measurements-merged.root:Data"  #Fourth data set -- calibration testing with 32 measurements. Many issues such as 0 stdev on many entries.
+file_name = '' #Enter path to root file here
 
-calib_file_2 = "../data/output-dataHG-mxhct22l-calibset-2024-10-07.root:Data"
-
-calib_file_3_HG = "../data/output-MDACCALIBRATION-HG-mxhct22l-2024-10-10.root:Data"
-
-calib_file_3_LG = "../data/output-MDACCALIBRATION-LG-mxhct22l-2024-10-10.root:Data"
-
-calib_file_4_LG = "../data/output-CALIB-LG-mxhct22l-2024-10-17.root:Data"
-
-json_file_1 = "../data/calibFile-MDACCalib-2024-10-10.json"
+if not os.path.exists(file_name):
+    print('ENTER VALID FILE NAME')
+    sys.exit()
+    
+plot_dir = f'plots_{file_name.split('/')[-1]}'
+os.makedirs(plot_dir, exist_ok=True)
 
 def get_root_data(file):
     '''
@@ -47,6 +41,8 @@ def ADC_vs_chan(file, stdev=True):
     file == path to root files
     stdev == plots the stdev of ADC if set to true 
     '''
+    sub_dir = f'{plot_dir}/ADC_vs_chan'
+    os.mkdir(sub_dir,exists_ok=True)
     data = get_root_data(file)
     
     #calculates the mean ADC and RMS for each measurement
@@ -89,7 +85,7 @@ def ADC_vs_chan(file, stdev=True):
         
         ax1.legend(loc='upper right', fontsize=15)
         plt.tight_layout()
-        plt.savefig(f'plots_{file.split('/')[-1]}/ADC_vs_chan/measurement_{measure}.png')
+        plt.savefig(f'{sub_dir}/measurement_{measure}.png')
         plt.clf()
         
 def ADC_vs_measure(file):
@@ -97,6 +93,9 @@ def ADC_vs_measure(file):
     Plots the ADC vs measurement for all 128 febChannels
     file == path to root files
     '''
+    sub_dir = f'{plot_dir}/ADC_vs_measurement'
+    os.mkdir(sub_dir,exists_ok=True)
+    
     data = get_root_data(file)
     
     #calculating mean ADC and RMS for all 128 febChannels
@@ -142,37 +141,8 @@ def ADC_vs_measure(file):
         plt.plot(list(range(32)), means, label='Mean ADC')
         plt.legend(fontsize=20)
         plt.tight_layout()
-        plt.savefig(f'plots_{file.split('/')[-1]}/ADC_vs_measurement/channel_{chan}.png')
-        # fig, ax1 = plt.subplots(figsize=(13,13))   
-        # ax1.set_title(f'ADC Mean per Measurement for channel {chan}', fontsize=20) 
-        # ax1.set_xlabel('Measurement', fontsize=15)
-        # ax1.set_ylabel('Mean ADC for Hi Measurements', fontsize=15)
-        # ax1.set_xlim(0,31)
-        # ax1.set_ylim(5820,5915)
-        # #ax1.set_ylim(np.min(means), np.max(means) + 40)
-        # ax1.scatter(measure_hi,means_hi,label='Hi Measurements', color='blue')
-        # ax1.legend(loc='upper left', fontsize=15)
-        # ax1.spines['left'].set_color('blue')
-        # ax1.spines['left'].set_linewidth(2)
-        # ax1.tick_params(labelsize=12)
-        # ax2 = ax1.twinx()
-        # ax2.set_ylim(2005, 2100)
-        # ax2.set_ylabel('Mean ADC for Lo Measurements', fontsize=15)
-        # ax2.scatter(measure_lo, means_lo, color='red', label='Lo Measurements')
-        # ax2.legend(loc='upper right', fontsize=15)
-        # ax2.spines['right'].set_color('red')
-        # ax2.spines['right'].set_linewidth(2)
-        # ax2.tick_params(labelsize=12)
-        
-        # if stdev:
-        #     ax2 = ax1.twinx()
-        #     #ax2.set_ylim(0,np.max(rms)+0.1)
-        #     ax2.plot(measures,rms,linewidth=2, color='orange', label='STDEV')
-        #     ax2.set_ylabel('STDEV', fontsize=15)
-        #     ax2.legend(loc='upper left', fontsize=15)
-        
-        # ax1.legend(loc='upper right', fontsize=15)
-        #plt.clf()
+        plt.savefig(f'{sub_dir}/channel_{chan}.png')
+
 
 def ADC_meas_2dhist(file):
     '''
@@ -196,17 +166,8 @@ def ADC_meas_2dhist(file):
         meas.append(measure)
     
     matrix[matrix == 0] = np.nan
-    #plotting html
-    # output_file("image_plot.html")
-
-    # p = figure(title="2D Image Plot", x_range=(0, 127), y_range=(0, 31),
-    #        toolbar_location=None, tools="")
-    # p.image(image=[matrix], x=0, y=0, dw=127, dh=31, palette="Spectral11")
-    # show(p)
 
     #plotting matplotlib
-    if not os.path.exists(f'plots_{file.split('/')[-1]}'):
-        os.mkdir(f'plots_{file.split('/')[-1]}')
     plt.figure(figsize=(15, 12))
     plt.title('ADC RMS for all Channels and Measurements', fontsize=30)
     plt.xlabel('febChannel', fontsize=30, loc='right')
@@ -232,18 +193,9 @@ def ADC_meas_2dhist(file):
     cbar.ax.tick_params(labelsize=20)  # Set the fontsize for the colorbar ticks
     cbar.set_label('RMS', fontsize=30)
     plt.tight_layout()
-    plt.savefig(f'plots_{file.split('/')[-1]}/2dhis_measure_vs_chan_rms.png', bbox_inches='tight')
+    plt.savefig(f'{plot_dir}}/2dhis_measure_vs_chan_rms.png', bbox_inches='tight')
     plt.clf()
     
-    # plt.figure(figsize=(13,12))
-    # plt.title('Min ADC RMS for all channels per Measurement')
-    # plt.xlabel('Measurement')
-    # plt.ylabel('Min ADC RMS')
-    # plt.xlim(0,31)
-    # plt.step(meas,mins)
-    # plt.tight_layout()
-    # plt.savefig(f'../plots/minrms_vs_meas.png')
-    # plt.clf()
     
     return matrix
 
@@ -276,8 +228,6 @@ def calibration_bit_check(file):
     #plotting
     matrix[matrix == 0] = np.nan
 
-    if not os.path.exists(f'plots_{file.split('/')[-1]}'):
-        os.mkdir(f'plots_{file.split('/')[-1]}')
     plt.figure(figsize=(15, 12))
     plt.title('# sticky bits', fontsize=30)
     plt.xlabel('febChannel', fontsize=30, loc='right')
@@ -300,7 +250,7 @@ def calibration_bit_check(file):
     cbar.ax.tick_params(labelsize=20)  # Set the fontsize for the colorbar ticks
     cbar.set_label('# bits', fontsize=30)
     plt.tight_layout()
-    plt.savefig(f'plots_{file.split('/')[-1]}/sticky_bit_hist.png', bbox_inches='tight')
+    plt.savefig(f'{plot_dir}/sticky_bit_hist.png', bbox_inches='tight')
     plt.clf()
 
 def meas_mean_hist(file):
@@ -322,14 +272,6 @@ def meas_mean_hist(file):
         for chan in range(128):
             data_chan = data_meas[data_meas['febChannel'] == chan]
             matrix[meas][chan] = np.mean(data_chan['ADC'] - meas_mean)
-        
-    # plt.figure(figsize=(13,13))
-    # plt.step(measure, meas_bar)
-    # plt.title('Mean ADC vs Measurment')
-    # plt.xlabel('Measurement')
-    # plt.ylabel('Mean ADC')
-    # plt.savefig(f'../plots/1d_mean_meas_hist.png')
-    # plt.clf()
         
     matrix[matrix == 0] = np.nan
     #plotting
@@ -355,7 +297,7 @@ def meas_mean_hist(file):
     cbar.ax.tick_params(labelsize=20)  # Set the fontsize for the colorbar ticks
     cbar.set_label('Mean_chan-Mean_measure', fontsize=30)
     plt.tight_layout()
-    plt.savefig(f'plots_{file.split('/')[-1]}/2d_mean_meas_hist.png', bbox_inches='tight')
+    plt.savefig(f'{plot_dir}/2d_mean_meas_hist.png', bbox_inches='tight')
 
 def MDAC_const(file, gain, json_file):
     '''
@@ -399,6 +341,9 @@ def ADC_hist(file,chan,gain,measurement):
     '''
     Plots the ADC distribution for the specified channel, gain and measurement 
     '''
+    sub_dir = f'{plot_dir}/ADC_hist'
+    os.mkdir(sub_dir,exits_ok=True)
+    
     #getting data
     data = get_root_data(file)
     data_adc = data[(data['febChannel']==chan) & (data['Measurement']==measurement)]['ADC'].to_numpy().flatten()
@@ -428,19 +373,10 @@ def ADC_hist(file,chan,gain,measurement):
     ax.yaxis.set_ticks_position('both')
     plt.hist(data_adc,bins=bins, edgecolor='black')
     plt.tight_layout()
-    plt.savefig(f'plots_{file.split('/')[-1]}/ADC_dist/chan{chan}_gain{gain}_meas{measurement}.png')
+    plt.savefig(f'{sub_dir}/chan{chan}_gain{gain}_meas{measurement}.png')
 
-if __name__ == "__main__":
-    file_name = args[1]
-    if not os.path.exists(f'plots_{file_name.split('/')[-1]}'):
-        os.mkdir(f'plots_{file_name.split('/')[-1]}')
         
-    ADC_meas_2dhist(file_name)
-    meas_mean_hist(file_name)
-    if not os.path.exists(f'plots_{file_name.split('/')[-1]}/ADC_vs_chan'):
-        os.mkdir(f'plots_{file_name.split('/')[-1]}/ADC_vs_chan')
-    ADC_vs_chan(file_name)
-    if not os.path.exists(f'plots_{file_name.split('/')[-1]}/ADC_vs_measurement'):
-        os.mkdir(f'plots_{file_name.split('/')[-1]}/ADC_vs_measurement')
-    ADC_vs_measure(file_name)
-    
+ADC_meas_2dhist(file_name)
+meas_mean_hist(file_name)
+ADC_vs_chan(file_name)
+ADC_vs_measure(file_name)

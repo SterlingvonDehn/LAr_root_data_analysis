@@ -10,8 +10,6 @@ from matplotlib.colors import LogNorm
 import sys
 import os
 
-args = sys.argv
-
 file_name = '' #Enter path to root file here
 
 sample_rate = None #Enter event sample rate in Hz here
